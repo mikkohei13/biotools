@@ -4,10 +4,16 @@ import csv
 import io
 
 app = Flask(__name__)
+app.debug = True
 
 @app.route("/heatmap")
 def heatmap():
     return render_template("heatmap.html")
+
+
+@app.route("/species_richness")
+def species_richness():
+    return render_template("species_richness.html")
 
 
 @app.post("/api/upload")
@@ -52,6 +58,43 @@ def upload_tsv():
             return jsonify({"error": "No valid coordinates found in file"}), 400
 
         return jsonify({"points": points, "count": len(points)})
+    except Exception as exc:
+        return jsonify({"error": f"Failed to parse file: {exc}"}), 500
+
+
+@app.post("/api/upload_richness")
+def upload_tsv_richness():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part named 'file'"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+
+    try:
+        raw_bytes = file.read()
+        text = raw_bytes.decode("utf-8", errors="replace")
+        reader = csv.DictReader(io.StringIO(text), delimiter="\t")
+
+        records = []  # {lat, lon, name}
+        for row in reader:
+            try:
+                lat_str = (row.get("WGS84 N") or "").strip()
+                lon_str = (row.get("WGS84 E") or "").strip()
+                name = (row.get("Scientific name") or "").strip()
+                if not lat_str or not lon_str or not name:
+                    # Skip rows without coordinates or scientific name
+                    continue
+                latitude = float(lat_str)
+                longitude = float(lon_str)
+                records.append({"lat": latitude, "lon": longitude, "name": name})
+            except Exception:
+                continue
+
+        if not records:
+            return jsonify({"error": "No valid records with coordinates and Scientific name found in file"}), 400
+
+        return jsonify({"records": records, "count": len(records)})
     except Exception as exc:
         return jsonify({"error": f"Failed to parse file: {exc}"}), 500
 
