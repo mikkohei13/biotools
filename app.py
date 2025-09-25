@@ -23,6 +23,14 @@ def search():
 def simple():
     return render_template("simple.html")
 
+@app.route("/stats")
+def stats():
+    return render_template("stats.html")
+
+@app.route("/raw")
+def raw():
+    return render_template("raw.html")
+
 @app.route("/api/config")
 def get_config():
     return jsonify({

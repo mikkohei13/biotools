@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Simple URL Parser</title>
+    <title>Data Analyzer</title>
     <link rel="stylesheet" href="/static/search.css">
 </head>
 <body>
     <div class="container">
-        <h1>Simple URL Parser</h1>
+        <h1>Data Analyzer</h1>
         
         <div class="input-group">
-            <label for="urlInput">Enter URL with parameters:</label>
-            <input type="text" id="urlInput" placeholder="https://example.com?param1=value1&param2=value2">
+            <label for="urlInput">Enter Laji.fi observation search URL:</label>
+            <input type="text" id="urlInput" placeholder="https://laji.fi/observation/list?time=-1%2F0">
         </div>
         
-        <button id="parseBtn" onclick="parseUrl()">Parse URL & Call API</button>
+        <button id="parseBtn" onclick="parseUrl()">Get data</button>
         
         <div id="response" class="response" style="display: none;">
-            <h3>API Response Summary:</h3>
+            <h3>API Response:</h3>
             <div id="responseData"></div>
             <div id="saveSection" style="margin-top: 15px; display: none;">
                 <div class="input-group">
@@ -284,6 +284,8 @@
                             </div>
                         </div>
                         <div class="dataset-actions">
+                            <a href="/stats?id=${dataset.id}" class="view-stats-btn">View Stats</a>
+                            <a href="/raw?id=${dataset.id}" class="view-raw-btn">View Raw</a>
                             <button onclick="removeDataset('${dataset.id}')" class="remove-btn">Remove</button>
                         </div>
                     </div>

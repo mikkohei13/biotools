@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dataset Statistics</title>
+    <link rel="stylesheet" href="/static/search.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Dataset Statistics</h1>
+            <nav style="margin-bottom: 20px;">
+                <a href="/simple" class="back-btn">← Back to Datasets</a>
+            </nav>
+        </header>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <span>Loading dataset...</span>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="datasetInfo" class="dataset-info-section" style="display: none;">
+            <h3>Dataset Information</h3>
+            <div id="datasetDetails"></div>
+        </div>
+        
+        <div id="statistics" class="statistics-section" style="display: none;">
+            <h3>Statistics</h3>
+            <div id="statsContent"></div>
+        </div>
+        
+        <div id="noData" class="no-data" style="display: none;">
+            <p>No dataset found with the specified ID.</p>
+            <a href="/simple">Go back to create a dataset</a>
+        </div>
+    </div>
+
+    <script>
+        // IndexedDB setup
+        let db;
+        
+        // Initialize IndexedDB
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('BioToolsDatasets', 1);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve();
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const database = event.target.result;
+                    if (!database.objectStoreNames.contains('datasets')) {
+                        const store = database.createObjectStore('datasets', { keyPath: 'id' });
+                        store.createIndex('timestamp', 'timestamp', { unique: false });
+                        store.createIndex('url', 'url', { unique: false });
+                        store.createIndex('hash', 'hash', { unique: false });
+                    }
+                };
+            });
+        }
+        
+        // Get dataset ID from URL parameters
+        function getDatasetId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('id');
+        }
+        
+        // Load dataset from IndexedDB
+        async function loadDataset(datasetId) {
+            try {
+                const transaction = db.transaction(['datasets'], 'readonly');
+                const store = transaction.objectStore('datasets');
+                const request = store.get(datasetId);
+                
+                return new Promise((resolve) => {
+                    request.onsuccess = () => {
+                        resolve(request.result || null);
+                    };
+                    request.onerror = () => {
+                        resolve(null);
+                    };
+                });
+            } catch (error) {
+                console.error('Error loading dataset:', error);
+                return null;
+            }
+        }
+        
+        // Calculate statistics
+        function calculateStatistics(dataset) {
+            const results = dataset.data.results || [];
+            const stats = {
+                totalRecords: results.length,
+                uniqueSpecies: new Set(),
+                uniqueLocalities: new Set(),
+                uniqueObservers: new Set(),
+                dateRange: { earliest: null, latest: null },
+                recordBasisCounts: {},
+                habitatCounts: {}
+            };
+            
+            results.forEach(record => {
+                // Species
+                if (record.unit?.linkings?.taxon?.scientificName) {
+                    stats.uniqueSpecies.add(record.unit.linkings.taxon.scientificName);
+                }
+                
+                // Localities
+                if (record.gathering?.locality) {
+                    stats.uniqueLocalities.add(record.gathering.locality);
+                }
+                
+                // Observers
+                if (record.gathering?.team) {
+                    record.gathering.team.forEach(observer => {
+                        stats.uniqueObservers.add(observer);
+                    });
+                }
+                
+                // Dates
+                if (record.gathering?.displayDateTime) {
+                    const dateStr = record.gathering.displayDateTime.split(' ')[0]; // Get date part
+                    if (!stats.dateRange.earliest || dateStr < stats.dateRange.earliest) {
+                        stats.dateRange.earliest = dateStr;
+                    }
+                    if (!stats.dateRange.latest || dateStr > stats.dateRange.latest) {
+                        stats.dateRange.latest = dateStr;
+                    }
+                }
+                
+                // Record basis
+                const recordBasis = record.unit?.recordBasis || 'Unknown';
+                stats.recordBasisCounts[recordBasis] = (stats.recordBasisCounts[recordBasis] || 0) + 1;
+                
+                // Habitat
+                const habitat = record.unit?.linkings?.taxon?.primaryHabitat?.habitat || 'Unknown';
+                stats.habitatCounts[habitat] = (stats.habitatCounts[habitat] || 0) + 1;
+                
+            });
+                        
+            return stats;
+        }
+        
+        // Display dataset information
+        function displayDatasetInfo(dataset) {
+            const datasetInfoDiv = document.getElementById('datasetInfo');
+            const datasetDetailsDiv = document.getElementById('datasetDetails');
+            
+            datasetDetailsDiv.innerHTML = `
+                <div class="info-item">
+                    <strong>Name:</strong> ${dataset.name || 'Unnamed Dataset'}
+                </div>
+                <div class="info-item">
+                    <strong>ID:</strong> <code>${dataset.id}</code>
+                </div>
+                <div class="info-item">
+                    <strong>Created:</strong> ${dataset.created}
+                </div>
+                <div class="info-item">
+                    <strong>URL:</strong> <a href="${dataset.url}" target="_blank">${dataset.url}</a>
+                </div>
+                <div class="info-item">
+                    <strong>Total Records:</strong> ${dataset.data.total || 'N/A'}
+                </div>
+                ${dataset.data.paginationInfo ? `
+                <div class="info-item">
+                    <strong>Pages Fetched:</strong> ${dataset.data.paginationInfo.pagesFetched}
+                </div>
+                <div class="info-item">
+                    <strong>Records Fetched:</strong> ${dataset.data.paginationInfo.actualRecords}
+                </div>
+                ` : ''}
+            `;
+            
+            datasetInfoDiv.style.display = 'block';
+        }
+        
+        // Display statistics
+        function displayStatistics(stats) {
+            const statisticsDiv = document.getElementById('statistics');
+            const statsContentDiv = document.getElementById('statsContent');
+            
+            // Sort record basis counts
+            const sortedRecordBasis = Object.entries(stats.recordBasisCounts)
+                .sort(([,a], [,b]) => b - a);
+            
+            // Sort habitat counts
+            const sortedHabitats = Object.entries(stats.habitatCounts)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 10); // Top 10 habitats
+            
+            statsContentDiv.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h4>Basic Counts</h4>
+                        <div class="stat-item">
+                            <strong>Total Records:</strong> ${stats.totalRecords}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Unique Species:</strong> ${stats.uniqueSpecies.size}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Unique Localities:</strong> ${stats.uniqueLocalities.size}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Unique Observers:</strong> ${stats.uniqueObservers.size}
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h4>Date Range</h4>
+                        <div class="stat-item">
+                            <strong>Earliest:</strong> ${stats.dateRange.earliest || 'N/A'}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Latest:</strong> ${stats.dateRange.latest || 'N/A'}
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h4>Record Basis</h4>
+                        ${sortedRecordBasis.map(([basis, count]) => `
+                            <div class="stat-item">
+                                <strong>${basis}:</strong> ${count}
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="stat-card">
+                        <h4>Top Habitats</h4>
+                        ${sortedHabitats.map(([habitat, count]) => `
+                            <div class="stat-item">
+                                <strong>${habitat.split('/').pop()}:</strong> ${count}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            statisticsDiv.style.display = 'block';
+        }
+        
+        // Show error
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        // Show loading
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+        
+        // Hide loading
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                await initDB();
+                
+                const datasetId = getDatasetId();
+                if (!datasetId) {
+                    showError('No dataset ID provided. Please select a dataset from the Simple Parser page.');
+                    hideLoading();
+                    return;
+                }
+                
+                showLoading();
+                
+                const dataset = await loadDataset(datasetId);
+                if (!dataset) {
+                    document.getElementById('noData').style.display = 'block';
+                    hideLoading();
+                    return;
+                }
+                
+                displayDatasetInfo(dataset);
+                const stats = calculateStatistics(dataset);
+                displayStatistics(stats);
+                
+                hideLoading();
+                
+            } catch (error) {
+                console.error('Error initializing stats page:', error);
+                showError('Failed to load dataset statistics');
+                hideLoading();
+            }
+        });
+    </script>
+</body>
+</html>

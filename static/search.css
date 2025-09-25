@@ -400,3 +400,151 @@ button:disabled {
 #saveDatasetBtn:hover {
     background: #218838;
 }
+
+.back-btn {
+    color: #007bff;
+    text-decoration: none;
+}
+
+/* Stats page styles */
+.dataset-info-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border-left: 4px solid #007bff;
+}
+
+.info-item {
+    margin-bottom: 10px;
+    padding: 5px 0;
+}
+
+.info-item code {
+    background-color: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.statistics-section {
+    margin-top: 20px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-card h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 8px;
+}
+
+.stat-item {
+    margin-bottom: 8px;
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+.stat-item strong {
+    color: #495057;
+    min-width: 120px;
+    display: inline-block;
+}
+
+.no-data {
+    text-align: center;
+    padding: 40px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.no-data a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.no-data a:hover {
+    text-decoration: underline;
+}
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    margin-right: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #007bff;
+    font-style: italic;
+}
+
+/* Dataset action buttons */
+.dataset-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.view-stats-btn {
+    background: #17a2b8;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    text-decoration: none;
+    text-align: center;
+}
+
+.view-stats-btn:hover {
+    background: #138496;
+}
+
+.view-raw-btn {
+    background: #6f42c1;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    text-decoration: none;
+    text-align: center;
+}
+
+.view-raw-btn:hover {
+    background: #5a32a3;
+}
