@@ -31,6 +31,10 @@ def stats():
 def raw():
     return render_template("raw.html")
 
+@app.route("/heatmap_db")
+def heatmap_db():
+    return render_template("heatmap_db.html")
+
 @app.route("/api/config")
 def get_config():
     return jsonify({
