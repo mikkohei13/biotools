@@ -1,4 +1,5 @@
 venv/*
 __pycache__/*
+sampledata/*
 static/example-data.tsv
 config.py

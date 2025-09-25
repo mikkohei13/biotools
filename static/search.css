@@ -308,3 +308,95 @@ button:disabled {
     padding: 2px 6px;
     border-radius: 10px;
 }
+
+/* Dataset management styles */
+.datasets {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border-left: 4px solid #28a745;
+}
+
+.dataset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.dataset-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 15px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.dataset-info {
+    flex: 1;
+    margin-right: 15px;
+}
+
+.dataset-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.dataset-id {
+    font-family: monospace;
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 5px;
+}
+
+.dataset-url {
+    word-break: break-all;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.dataset-time {
+    color: #6c757d;
+    font-size: 14px;
+    margin-bottom: 5px;
+}
+
+.dataset-stats {
+    font-size: 14px;
+    color: #495057;
+}
+
+.dataset-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.remove-btn {
+    background: #dc3545;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.remove-btn:hover {
+    background: #c82333;
+}
+
+#saveDatasetBtn {
+    background: #28a745;
+    margin-top: 10px;
+}
+
+#saveDatasetBtn:hover {
+    background: #218838;
+}
