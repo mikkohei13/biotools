@@ -22,6 +22,8 @@ source venv/bin/activate
 python app.py
 ```
 
+Access the app at http://localhost:5000
+
 ### Stop working
 ```bash
 deactivate

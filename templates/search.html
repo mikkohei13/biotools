@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>URL Parameter Parser</title>
+    <link rel="stylesheet" href="/static/search.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>URL Parameter Parser</h1>
+        </header>
+        
+        <div class="input-group">
+            <label for="urlInput">Enter URL with parameters:</label>
+            <input type="text" id="urlInput">
+        </div>
+        
+        <button id="parseBtn" onclick="parseUrl()">Parse</button>
+        
+        <div id="results" class="results" style="display: none;">
+            <h3>URL Parameters:</h3>
+            <ul id="parameterList" class="parameter-list"></ul>
+            
+            <div id="apiUrlSection" class="api-url-section" style="display: none;">
+                <h4>Generated API URL:</h4>
+                <div id="apiUrl" class="api-url"></div>
+                <button id="callApiBtn" class="call-api-btn" onclick="callApi()">Call API</button>
+            </div>
+            
+            <div id="apiResponseSection" class="api-response-section" style="display: none;">
+                <h4>API Response:</h4>
+                <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Loading...</span>
+                </div>
+                <div id="responseSummary" class="response-summary"></div>
+                <div id="observerChart" class="observer-chart"></div>
+                <div id="responseData" class="response-data"></div>
+            </div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        async function parseUrl() {
+            const urlInput = document.getElementById('urlInput');
+            const resultsDiv = document.getElementById('results');
+            const errorDiv = document.getElementById('error');
+            const parameterList = document.getElementById('parameterList');
+            const apiUrlSection = document.getElementById('apiUrlSection');
+            const parseBtn = document.getElementById('parseBtn');
+            
+            // Clear previous results
+            resultsDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            parameterList.innerHTML = '';
+            apiUrlSection.style.display = 'none';
+            document.getElementById('apiResponseSection').style.display = 'none';
+            
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showError('Please enter a URL');
+                return;
+            }
+            
+            try {
+                // Create URL object to parse the URL
+                const urlObj = new URL(url);
+                const params = urlObj.searchParams;
+                
+                if (params.size === 0) {
+                    showError('No parameters found in the URL');
+                    return;
+                }
+                
+                // Display parameters
+                params.forEach((value, key) => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'parameter-item';
+                    
+                    const keySpan = document.createElement('span');
+                    keySpan.className = 'parameter-key';
+                    keySpan.textContent = key;
+                    
+                    const valueSpan = document.createElement('span');
+                    valueSpan.className = 'parameter-value';
+                    valueSpan.textContent = value;
+                    
+                    listItem.appendChild(keySpan);
+                    listItem.appendChild(valueSpan);
+                    parameterList.appendChild(listItem);
+                });
+                
+                // Generate API URL
+                await generateApiUrl(params);
+                
+                resultsDiv.style.display = 'block';
+                
+            } catch (error) {
+                showError('Invalid URL format. Please check your URL and try again.');
+                console.error('URL parsing error:', error);
+            }
+        }
+        
+        async function generateApiUrl(params) {
+            try {
+                // Fetch config from Flask app
+                const configResponse = await fetch('/api/config');
+                const config = await configResponse.json();
+                
+                const baseUrl = config.base_url;
+                const apiParams = new URLSearchParams();
+                
+                // Default parameters
+                apiParams.set('pageSize', '100');
+                apiParams.set('page', '1');
+                apiParams.set('cache', 'false');
+                apiParams.set('useIdentificationAnnotations', 'true');
+                apiParams.set('includeSubTaxa', 'true');
+                apiParams.set('includeNonValidTaxa', 'true');
+                apiParams.set('individualCountMin', '1');
+                apiParams.set('includeNullLoadDates', 'false');
+                apiParams.set('qualityIssues', 'NO_ISSUES');
+                apiParams.set('access_token', config.access_token);
+                
+                // Add all parameters from the input URL as they are
+                params.forEach((value, key) => {
+                    apiParams.set(key, value);
+                });
+                
+                // Build the final API URL
+                const apiUrl = `${baseUrl}?${apiParams.toString()}`;
+                
+                // Store the URL for API calls
+                window.currentApiUrl = apiUrl;
+                
+                // Display the API URL
+                document.getElementById('apiUrl').textContent = apiUrl;
+                document.getElementById('apiUrlSection').style.display = 'block';
+            } catch (error) {
+                console.error('Config fetch error:', error);
+                showError('Failed to load configuration');
+            }
+        }
+        
+        async function callApi() {
+            const callApiBtn = document.getElementById('callApiBtn');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const responseSection = document.getElementById('apiResponseSection');
+            const responseSummary = document.getElementById('responseSummary');
+            const responseData = document.getElementById('responseData');
+            
+            // Show loading state
+            callApiBtn.disabled = true;
+            callApiBtn.textContent = 'Calling API...';
+            loadingIndicator.style.display = 'flex';
+            responseSection.style.display = 'block';
+            responseSummary.innerHTML = '';
+            responseData.innerHTML = '';
+            
+            try {
+                const response = await fetch(window.currentApiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Display response summary
+                responseSummary.innerHTML = `
+                    <div class="summary-item">
+                        <strong>Total Results:</strong> ${data.total || 0}
+                    </div>
+                    <div class="summary-item">
+                        <strong>Current Page:</strong> ${data.currentPage || 1} of ${data.lastPage || 1}
+                    </div>
+                    <div class="summary-item">
+                        <strong>Page Size:</strong> ${data.pageSize || 1000}
+                    </div>
+                `;
+                
+                // Generate observer chart
+                generateObserverChart(data.results || []);
+                
+                // Display results
+                if (data.results && data.results.length > 0) {
+                    responseData.innerHTML = '<h5>Results:</h5>';
+                    data.results.forEach((item, index) => {
+                        const resultDiv = document.createElement('div');
+                        resultDiv.className = 'result-item';
+                        resultDiv.innerHTML = `
+                            <div class="result-header">
+                                <strong>Result ${index + 1}</strong>
+                            </div>
+                            <div class="result-content">
+                                <div class="result-section">
+                                    <strong>Species:</strong> ${item.unit?.linkings?.taxon?.scientificName || 'N/A'}
+                                    ${item.unit?.linkings?.taxon?.vernacularName?.fi ? ` (${item.unit.linkings.taxon.vernacularName.fi})` : ''}
+                                </div>
+                                <div class="result-section">
+                                    <strong>Location:</strong> ${item.gathering?.locality || 'N/A'}
+                                    ${item.gathering?.conversions?.wgs84CenterPoint ? 
+                                        ` (${item.gathering.conversions.wgs84CenterPoint.lat}, ${item.gathering.conversions.wgs84CenterPoint.lon})` : ''}
+                                </div>
+                                <div class="result-section">
+                                    <strong>Date:</strong> ${item.gathering?.displayDateTime || 'N/A'}
+                                </div>
+                                <div class="result-section">
+                                    <strong>Observer:</strong> ${item.gathering?.team?.join(', ') || 'N/A'}
+                                </div>
+                                <div class="result-section">
+                                    <strong>Record Basis:</strong> ${item.unit?.recordBasis || 'N/A'}
+                                </div>
+                            </div>
+                        `;
+                        responseData.appendChild(resultDiv);
+                    });
+                } else {
+                    responseData.innerHTML = '<p>No results found.</p>';
+                }
+                
+            } catch (error) {
+                console.error('API call error:', error);
+                responseSummary.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+                responseData.innerHTML = '';
+            } finally {
+                // Hide loading state
+                callApiBtn.disabled = false;
+                callApiBtn.textContent = 'Call API';
+                loadingIndicator.style.display = 'none';
+            }
+        }
+        
+        function generateObserverChart(results) {
+            const chartContainer = document.getElementById('observerChart');
+            
+            if (!results || results.length === 0) {
+                chartContainer.innerHTML = '<p>No data available for chart.</p>';
+                return;
+            }
+            
+            // Count observations per observer
+            const observerCounts = {};
+            results.forEach(item => {
+                if (item.gathering?.team) {
+                    item.gathering.team.forEach(observer => {
+                        observerCounts[observer] = (observerCounts[observer] || 0) + 1;
+                    });
+                }
+            });
+            
+            // Sort observers by count and get top 10
+            const topObservers = Object.entries(observerCounts)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 10);
+            
+            if (topObservers.length === 0) {
+                chartContainer.innerHTML = '<p>No observer data available.</p>';
+                return;
+            }
+            
+            // Find max count for scaling
+            const maxCount = Math.max(...topObservers.map(([, count]) => count));
+            
+            // Generate chart HTML
+            let chartHTML = '<h5>Top 10 Most Active Observers</h5>';
+            chartHTML += '<div class="chart-container">';
+            
+            topObservers.forEach(([observer, count], index) => {
+                const percentage = (count / maxCount) * 100;
+                const barWidth = Math.max(percentage, 5); // Minimum 5% width for visibility
+                
+                chartHTML += `
+                    <div class="chart-row">
+                        <div class="observer-name">${observer}</div>
+                        <div class="bar-container">
+                            <div class="bar" style="width: ${barWidth}%"></div>
+                            <span class="count">${count}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            chartHTML += '</div>';
+            chartContainer.innerHTML = chartHTML;
+        }
+
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        // Allow Enter key to trigger parsing
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                parseUrl();
+            }
+        });
+        
+        // Clear results when user starts typing
+        document.getElementById('urlInput').addEventListener('input', function() {
+            const resultsDiv = document.getElementById('results');
+            const errorDiv = document.getElementById('error');
+            resultsDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Simple URL Parser</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .loading {
+            color: #007bff;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Simple URL Parser</h1>
+        
+        <div class="input-group">
+            <label for="urlInput">Enter URL with parameters:</label>
+            <input type="text" id="urlInput" placeholder="https://example.com?param1=value1&param2=value2">
+        </div>
+        
+        <button id="parseBtn" onclick="parseUrl()">Parse URL & Call API</button>
+        
+        <div id="response" class="response" style="display: none;">
+            <h3>API Response Summary:</h3>
+            <div id="responseData"></div>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        async function parseUrl() {
+            const urlInput = document.getElementById('urlInput');
+            const errorDiv = document.getElementById('error');
+            const responseDiv = document.getElementById('response');
+            
+            // Clear previous results
+            errorDiv.style.display = 'none';
+            responseDiv.style.display = 'none';
+            
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showError('Please enter a URL');
+                return;
+            }
+            
+            try {
+                // Create URL object to parse the URL
+                const urlObj = new URL(url);
+                const params = urlObj.searchParams;
+                
+                if (params.size === 0) {
+                    showError('No parameters found in the URL');
+                    return;
+                }
+                
+                // Generate API URL and call it immediately
+                await generateApiUrlAndCall(params);
+                
+            } catch (error) {
+                showError('Invalid URL format. Please check your URL and try again.');
+                console.error('URL parsing error:', error);
+            }
+        }
+        
+        async function generateApiUrlAndCall(params) {
+            try {
+                // Fetch config from Flask app
+                const configResponse = await fetch('/api/config');
+                const config = await configResponse.json();
+                
+                const baseUrl = config.base_url;
+                const apiParams = new URLSearchParams();
+                
+                // Default parameters
+                apiParams.set('pageSize', '100');
+                apiParams.set('page', '1');
+                apiParams.set('cache', 'false');
+                apiParams.set('useIdentificationAnnotations', 'true');
+                apiParams.set('includeSubTaxa', 'true');
+                apiParams.set('includeNonValidTaxa', 'true');
+                apiParams.set('individualCountMin', '1');
+                apiParams.set('includeNullLoadDates', 'false');
+                apiParams.set('qualityIssues', 'NO_ISSUES');
+                apiParams.set('access_token', config.access_token);
+                
+                // Add all parameters from the input URL as they are
+                params.forEach((value, key) => {
+                    apiParams.set(key, value);
+                });
+                
+                // Build the final API URL
+                const apiUrl = `${baseUrl}?${apiParams.toString()}`;
+                
+                // Call the API immediately
+                await callApi(apiUrl);
+            } catch (error) {
+                console.error('Config fetch error:', error);
+                showError('Failed to load configuration');
+            }
+        }
+        
+        async function callApi(apiUrl) {
+            const parseBtn = document.getElementById('parseBtn');
+            const responseDiv = document.getElementById('response');
+            const responseData = document.getElementById('responseData');
+            const errorDiv = document.getElementById('error');
+            
+            // Show loading state
+            parseBtn.disabled = true;
+            parseBtn.textContent = 'Calling API...';
+            responseDiv.style.display = 'block';
+            responseData.innerHTML = '<div class="loading">Loading...</div>';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Display only the specific pagination variables
+                const summary = {
+                    currentPage: data.currentPage || 'N/A',
+                    nextPage: data.nextPage || 'N/A',
+                    lastPage: data.lastPage || 'N/A',
+                    pageSize: data.pageSize || 'N/A',
+                    total: data.total || 'N/A'
+                };
+                
+                responseData.innerHTML = `
+                    <div><strong>Current Page:</strong> ${summary.currentPage}</div>
+                    <div><strong>Next Page:</strong> ${summary.nextPage}</div>
+                    <div><strong>Last Page:</strong> ${summary.lastPage}</div>
+                    <div><strong>Page Size:</strong> ${summary.pageSize}</div>
+                    <div><strong>Total:</strong> ${summary.total}</div>
+                `;
+                
+            } catch (error) {
+                console.error('API call error:', error);
+                responseData.innerHTML = '';
+                showError(`Error: ${error.message}`);
+            } finally {
+                // Hide loading state
+                parseBtn.disabled = false;
+                parseBtn.textContent = 'Parse URL & Call API';
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        // Allow Enter key to trigger parsing
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                parseUrl();
+            }
+        });
+        
+        // Clear results when user starts typing
+        document.getElementById('urlInput').addEventListener('input', function() {
+            const errorDiv = document.getElementById('error');
+            const responseDiv = document.getElementById('response');
+            errorDiv.style.display = 'none';
+            responseDiv.style.display = 'none';
+        });
+    </script>
+</body>
+</html>

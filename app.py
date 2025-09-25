@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from livereload import Server
 import csv
 import io
+from config import LAJI_API_ACCESS_TOKEN, LAJI_API_BASE_URL
 
 app = Flask(__name__)
 app.debug = True
@@ -10,11 +11,24 @@ app.debug = True
 def heatmap():
     return render_template("heatmap.html")
 
-
 @app.route("/species_richness")
 def species_richness():
     return render_template("species_richness.html")
 
+@app.route("/search")
+def search():
+    return render_template("search.html")
+
+@app.route("/simple")
+def simple():
+    return render_template("simple.html")
+
+@app.route("/api/config")
+def get_config():
+    return jsonify({
+        "access_token": LAJI_API_ACCESS_TOKEN,
+        "base_url": LAJI_API_BASE_URL
+    })
 
 @app.post("/api/upload")
 def upload_tsv():
