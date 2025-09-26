@@ -116,29 +116,19 @@
             
             try {
                 while (currentPage <= 10 && totalRecords < 1000) {
-                    // Update the page parameter
-                    const apiParams = new URLSearchParams();
-                    apiParams.set('pageSize', pageSize.toString());
-                    apiParams.set('page', currentPage.toString());
-                    apiParams.set('cache', 'false');
-                    apiParams.set('useIdentificationAnnotations', 'true');
-                    apiParams.set('includeSubTaxa', 'true');
-                    apiParams.set('includeNonValidTaxa', 'true');
-                    apiParams.set('individualCountMin', '1');
-                    apiParams.set('includeNullLoadDates', 'false');
-                    apiParams.set('qualityIssues', 'NO_ISSUES');
-                    apiParams.set('access_token', config.access_token);
-                    
+                    // Build the base query string
+                    let apiQuery = `access_token=${encodeURIComponent(config.access_token)}&pageSize=${pageSize}&page=${currentPage}&cache=true&useIdentificationAnnotations=true&includeSubTaxa=true&includeNonValidTaxa=true&individualCountMin=1&includeNullLoadDates=false&qualityIssues=NO_ISSUES&selected=unit.interpretations.recordQuality,document.linkings.collectionQuality,unit.linkings.taxon.taxonomicOrder,unit.abundanceString,gathering.displayDateTime,gathering.interpretations.countryDisplayname,gathering.interpretations.biogeographicalProvinceDisplayname,gathering.locality,document.collectionId,document.documentId,gathering.team,unit.linkings.taxon.vernacularName,unit.linkings.taxon.scientificName,unit.linkings.taxon.cursiveName,unit.linkings.taxon.latestRedListStatusFinland,unit.linkings.taxon.primaryHabitat,gathering.conversions.dayOfYearBegin,gathering.conversions.dayOfYearEnd,unit.det,unit.abundanceUnit,unit.interpretations.individualCount,unit.lifeStage,unit.sex,unit.atlasCode,unit.atlasClass,gathering.conversions.wgs84CenterPoint.lat,gathering.conversions.wgs84CenterPoint.lon,gathering.conversions.eurefCenterPoint.lat,gathering.conversions.eurefCenterPoint.lon,gathering.interpretations.coordinateAccuracy,gathering.conversions.wgs84WKT,gathering.conversions.ykj10kmCenter,unit.recordBasis,unit.notes,unit.unitId,unit.linkings.taxon.occurrenceCountFinland,unit.unitId,document.documentId`;
+
                     // Add original parameters from the input URL
                     const urlObj = new URL(baseUrl);
-                    const originalParams = urlObj.searchParams;
-                    originalParams.forEach((value, key) => {
-                        if (key !== 'page' && key !== 'pageSize') {
-                            apiParams.set(key, value);
-                        }
+                    urlObj.searchParams.forEach((value, key) => {
+                    if (key !== "page" && key !== "pageSize") {
+                        apiQuery += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+                    }
                     });
-                    
-                    const apiUrl = `${config.base_url}?${apiParams.toString()}`;
+
+                    // Final API URL
+                    const apiUrl = `${config.base_url}?${apiQuery}`;
                     
                     const response = await fetch(apiUrl);
                     if (!response.ok) {
