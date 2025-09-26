@@ -209,7 +209,7 @@
             let currentPage = 1;
             let totalRecords = 0;
             let lastPage = 1;
-            let pageSize = 100;
+            let pageSize = 1000;
             let totalTime = 0;
             const startTime = Date.now();
             
@@ -220,7 +220,7 @@
             document.getElementById('progressLog').innerHTML = '';
             
             try {
-                while (currentPage <= 10 && totalRecords < 1000) {
+                while (currentPage <= 10 && totalRecords < 10000) {
                     const pageStartTime = Date.now();
                     
                     // Build the base query string
@@ -252,7 +252,7 @@
                     // Store first page data for metadata
                     if (currentPage === 1) {
                         lastPage = data.lastPage || 1;
-                        pageSize = data.pageSize || 100;
+                        pageSize = data.pageSize || 1000;
                         addProgressLog(`Page ${currentPage}: ${data.results ? data.results.length : 0} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`);
                     } else {
                         addProgressLog(`Page ${currentPage}: ${data.results ? data.results.length : 0} records fetched in ${pageTime.toFixed(2)}s`);
@@ -290,7 +290,7 @@
                     paginationInfo: {
                         pagesFetched: currentPage - 1,
                         maxPages: 10,
-                        maxRecords: 1000,
+                        maxRecords: 10000,
                         actualRecords: totalRecords
                     }
                 };

@@ -16,6 +16,7 @@
   }).addTo(map);
 
   let gridLayer = null;
+  let lessAccurateLayer = null;
   let currentDataset = null;
   let db = null;
 
@@ -89,37 +90,76 @@
     }
   }
 
-  // Extract WGS84 coordinates from dataset results
+  // Extract WGS84 coordinates from dataset results, separating accurate and less accurate records
   function extractWGS84Coordinates(dataset) {
-    const points = [];
+    const accuratePoints = [];
+    const lessAccurateRecords = [];
     
     if (!dataset || !dataset.data || !dataset.data.results) {
-      return points;
+      return { accuratePoints, lessAccurateRecords };
     }
     
     console.log(`Processing ${dataset.data.results.length} results for WGS84 coordinates`);
     
     dataset.data.results.forEach((result, index) => {
       try {
-        // Check if the result has WGS84 coordinates
         const gathering = result.gathering;
-        if (gathering && gathering.conversions && gathering.conversions.wgs84CenterPoint) {
-          const lat = gathering.conversions.wgs84CenterPoint.lat;
-          const lon = gathering.conversions.wgs84CenterPoint.lon;
-          
-          if (lat && lon && !isNaN(lat) && !isNaN(lon)) {
-            const point = {
-              lat: parseFloat(lat),
-              lon: parseFloat(lon),
-              weight: result.gathering?.interpretations?.individualCount || 1
+        if (!gathering || !gathering.conversions) {
+          return;
+        }
+
+        const coordinateAccuracy = gathering.interpretations?.coordinateAccuracy;
+        const wgs84CenterPoint = gathering.conversions.wgs84CenterPoint;
+        const wgs84WKT = gathering.conversions.wgs84WKT;
+
+        // Check if coordinate accuracy is available and less than 2000 meters (more accurate)
+        if (coordinateAccuracy !== undefined && coordinateAccuracy < 2000) {
+          if (wgs84CenterPoint && wgs84CenterPoint.lat && wgs84CenterPoint.lon) {
+            const lat = parseFloat(wgs84CenterPoint.lat);
+            const lon = parseFloat(wgs84CenterPoint.lon);
+            
+            if (!isNaN(lat) && !isNaN(lon)) {
+              const point = {
+                lat: lat,
+                lon: lon,
+                weight: result.gathering?.interpretations?.individualCount || 1,
+                accuracy: coordinateAccuracy
+              };
+              
+              accuratePoints.push(point);
+            }
+          }
+        }
+        // Check if coordinate accuracy is 2000 meters or higher (less accurate)
+        else if (coordinateAccuracy !== undefined && coordinateAccuracy >= 2000) {
+          if (wgs84WKT) {
+            const record = {
+              wgs84WKT: wgs84WKT,
+              weight: result.gathering?.interpretations?.individualCount || 1,
+              accuracy: coordinateAccuracy,
+              centerPoint: wgs84CenterPoint ? {
+                lat: parseFloat(wgs84CenterPoint.lat),
+                lon: parseFloat(wgs84CenterPoint.lon)
+              } : null
             };
             
-            // Log first few points for debugging
-            if (index < 5) {
-              console.log(`Point ${index}:`, point);
-            }
+            lessAccurateRecords.push(record);
+          }
+        }
+        // If no coordinate accuracy is specified, treat as accurate if center point exists
+        else if (wgs84CenterPoint && wgs84CenterPoint.lat && wgs84CenterPoint.lon) {
+          const lat = parseFloat(wgs84CenterPoint.lat);
+          const lon = parseFloat(wgs84CenterPoint.lon);
+          
+          if (!isNaN(lat) && !isNaN(lon)) {
+            const point = {
+              lat: lat,
+              lon: lon,
+              weight: result.gathering?.interpretations?.individualCount || 1,
+              accuracy: coordinateAccuracy || 0
+            };
             
-            points.push(point);
+            accuratePoints.push(point);
           }
         }
       } catch (error) {
@@ -128,8 +168,134 @@
       }
     });
     
-    console.log(`Extracted ${points.length} valid WGS84 coordinates`);
-    return points;
+    console.log(`Extracted ${accuratePoints.length} accurate coordinates and ${lessAccurateRecords.length} less accurate records`);
+    return { accuratePoints, lessAccurateRecords };
+  }
+
+  // Parse WGS84 WKT polygon string to extract coordinates
+  function parseWGS84WKT(wktString) {
+    try {
+      // Extract coordinates from POLYGON WKT format
+      // Example: "POLYGON ((28.802685 61.154726, 28.799897 61.156103, ...))"
+      const coordMatch = wktString.match(/POLYGON\s*\(\s*\((.*?)\)\s*\)/i);
+      if (!coordMatch) {
+        console.warn('Invalid WKT format:', wktString);
+        return null;
+      }
+      
+      const coordString = coordMatch[1];
+      const coordPairs = coordString.split(',').map(pair => pair.trim());
+      
+      const coordinates = coordPairs.map(pair => {
+        const [lon, lat] = pair.split(/\s+/).map(coord => parseFloat(coord));
+        return [lat, lon]; // Leaflet expects [lat, lon] format
+      });
+      
+      return coordinates;
+    } catch (error) {
+      console.warn('Error parsing WKT:', error, wktString);
+      return null;
+    }
+  }
+
+  // Check if a polygon overlaps with any of the accurate grid squares
+  function checkPolygonOverlap(polygonCoords, accurateGridSquares) {
+    if (!polygonCoords || polygonCoords.length < 3) {
+      return true; // Invalid polygon, consider it overlapping to discard
+    }
+    
+    // Create a Leaflet polygon for overlap checking
+    const polygon = L.polygon(polygonCoords);
+    const polygonBounds = polygon.getBounds();
+    
+    for (const gridSquare of accurateGridSquares) {
+      const gridPolygon = L.polygon(gridSquare.bounds);
+      const gridBounds = gridPolygon.getBounds();
+      
+      // Check if bounding boxes intersect first (faster check)
+      if (polygonBounds.intersects(gridBounds)) {
+        // If bounding boxes intersect, do a more detailed check
+        // Check if any corner of the polygon is inside the grid square
+        for (const coord of polygonCoords) {
+          if (gridBounds.contains(coord)) {
+            return true; // Polygon corner is inside grid square
+          }
+        }
+        
+        // Check if any corner of the grid square is inside the polygon
+        for (const bound of gridSquare.bounds) {
+          if (polygonBounds.contains(bound)) {
+            return true; // Grid square corner is inside polygon
+          }
+        }
+        
+        // Additional check: if polygon center is inside grid square
+        const polygonCenter = polygon.getBounds().getCenter();
+        if (gridBounds.contains(polygonCenter)) {
+          return true;
+        }
+        
+        // Check if grid square center is inside polygon
+        const gridCenter = gridBounds.getCenter();
+        if (polygonBounds.contains(gridCenter)) {
+          return true;
+        }
+      }
+    }
+    
+    return false; // No overlap
+  }
+
+  // Check if a polygon overlaps with any other polygons
+  function checkPolygonOverlapWithOthers(polygonCoords, otherPolygons) {
+    if (!polygonCoords || polygonCoords.length < 3) {
+      return true; // Invalid polygon, consider it overlapping to discard
+    }
+    
+    // Create a Leaflet polygon for overlap checking
+    const polygon = L.polygon(polygonCoords);
+    const polygonBounds = polygon.getBounds();
+    
+    for (const otherCoords of otherPolygons) {
+      if (!otherCoords || otherCoords.length < 3) {
+        continue; // Skip invalid polygons
+      }
+      
+      const otherPolygon = L.polygon(otherCoords);
+      const otherBounds = otherPolygon.getBounds();
+      
+      // Check if bounding boxes intersect first (faster check)
+      if (polygonBounds.intersects(otherBounds)) {
+        // If bounding boxes intersect, do a more detailed check
+        // Check if any corner of the polygon is inside the other polygon
+        for (const coord of polygonCoords) {
+          if (otherBounds.contains(coord)) {
+            return true; // Polygon corner is inside other polygon
+          }
+        }
+        
+        // Check if any corner of the other polygon is inside the polygon
+        for (const coord of otherCoords) {
+          if (polygonBounds.contains(coord)) {
+            return true; // Other polygon corner is inside polygon
+          }
+        }
+        
+        // Additional check: if polygon center is inside other polygon
+        const polygonCenter = polygon.getBounds().getCenter();
+        if (otherBounds.contains(polygonCenter)) {
+          return true;
+        }
+        
+        // Check if other polygon center is inside polygon
+        const otherCenter = otherBounds.getCenter();
+        if (polygonBounds.contains(otherCenter)) {
+          return true;
+        }
+      }
+    }
+    
+    return false; // No overlap
   }
 
   // Calculate which 2km grid squares contain points
@@ -186,85 +352,167 @@
   }
 
   // Create or update grid visualization
-  function createOrUpdateGrid(gridSquares) {
-    // Remove existing grid layer
+  function createOrUpdateGrid(accurateGridSquares, lessAccurateRecords) {
+    // Remove existing layers
     if (gridLayer) {
       map.removeLayer(gridLayer);
     }
-    
-    if (gridSquares.length === 0) {
-      console.log('No grid squares to display');
-      return;
+    if (lessAccurateLayer) {
+      map.removeLayer(lessAccurateLayer);
     }
-
-    console.log(`Creating ${gridSquares.length} grid squares`);
     
-    // Create new layer group for grid squares
-    gridLayer = L.layerGroup();
+    let totalVisibleSquares = 0;
     
-    // Calculate color scale based on record count
-    const maxCount = Math.max(...gridSquares.map(sq => sq.count));
-    const minCount = Math.min(...gridSquares.map(sq => sq.count));
-    
-    console.log(`Record count range: ${minCount} - ${maxCount}`);
-    
-    gridSquares.forEach((square, index) => {
-      // Log first few squares for debugging
-      if (index < 3) {
-        const latSizeKm = GRID_SIZE_LAT_DEGREES * 111;
-        const lonSizeKm = GRID_SIZE_LON_DEGREES * 111 * Math.cos(REFERENCE_LATITUDE * Math.PI / 180);
-        console.log(`Square ${index}:`, {
-          bounds: square.bounds,
-          count: square.count,
-          gridLat: square.gridLat,
-          gridLon: square.gridLon,
-          latIndex: square.latIndex,
-          lonIndex: square.lonIndex,
-          actualSizeKm: `${latSizeKm.toFixed(2)}km × ${lonSizeKm.toFixed(2)}km`
+    // Create accurate 2km grid squares
+    if (accurateGridSquares.length > 0) {
+      console.log(`Creating ${accurateGridSquares.length} accurate grid squares`);
+      
+      // Create new layer group for accurate grid squares
+      gridLayer = L.layerGroup();
+      
+      // Calculate color scale based on record count
+      const maxCount = Math.max(...accurateGridSquares.map(sq => sq.count));
+      const minCount = Math.min(...accurateGridSquares.map(sq => sq.count));
+      
+      console.log(`Accurate record count range: ${minCount} - ${maxCount}`);
+      
+      accurateGridSquares.forEach((square, index) => {
+        // Log first few squares for debugging
+        if (index < 3) {
+          const latSizeKm = GRID_SIZE_LAT_DEGREES * 111;
+          const lonSizeKm = GRID_SIZE_LON_DEGREES * 111 * Math.cos(REFERENCE_LATITUDE * Math.PI / 180);
+          console.log(`Accurate Square ${index}:`, {
+            bounds: square.bounds,
+            count: square.count,
+            gridLat: square.gridLat,
+            gridLon: square.gridLon,
+            latIndex: square.latIndex,
+            lonIndex: square.lonIndex,
+            actualSizeKm: `${latSizeKm.toFixed(2)}km × ${lonSizeKm.toFixed(2)}km`
+          });
+        }
+        
+        // Calculate color intensity based on record count
+        const intensity = maxCount > minCount ? 
+          (square.count - minCount) / (maxCount - minCount) : 0.5;
+        
+        // Create color from blue (low) to red (high)
+        const red = Math.floor(intensity * 255);
+        const blue = Math.floor((1 - intensity) * 255);
+        const color = `rgb(${red}, 0, ${blue})`;
+        
+        // Create rectangle for this grid square
+        const rectangle = L.rectangle(square.bounds, {
+          color: '#000000',  // Black border for visibility
+          weight: 1,         // Border weight
+          fillColor: color,
+          fillOpacity: 0.6   // Semi-transparent
         });
-      }
-      
-      // Calculate color intensity based on record count
-      const intensity = maxCount > minCount ? 
-        (square.count - minCount) / (maxCount - minCount) : 0.5;
-      
-      // Create color from blue (low) to red (high)
-      const red = Math.floor(intensity * 255);
-      const blue = Math.floor((1 - intensity) * 255);
-      const color = `rgb(${red}, 0, ${blue})`;
-      
-      // Create rectangle for this grid square
-      const rectangle = L.rectangle(square.bounds, {
-        color: '#000000',  // Black border for visibility
-        weight: 1,         // Border weight
-        fillColor: color,
-        fillOpacity: 0.6   // Semi-transparent
+        
+        // Add popup with information
+        rectangle.bindPopup(`
+          <strong>2km Grid Square (Accurate)</strong><br>
+          Records: ${square.count}<br>
+          Total Weight: ${square.totalWeight.toFixed(1)}<br>
+          Grid Index: (${square.latIndex}, ${square.lonIndex})<br>
+          Grid Center: ${(square.gridLat + GRID_SIZE_LAT_DEGREES/2).toFixed(6)}, ${(square.gridLon + GRID_SIZE_LON_DEGREES/2).toFixed(6)}<br>
+          Grid Size: ${(GRID_SIZE_LAT_DEGREES * 111).toFixed(1)}km × ${(GRID_SIZE_LON_DEGREES * 111 * Math.cos(REFERENCE_LATITUDE * Math.PI / 180)).toFixed(1)}km
+        `);
+        
+        gridLayer.addLayer(rectangle);
       });
       
-      // Add popup with information
-      rectangle.bindPopup(`
-        <strong>2km Grid Square</strong><br>
-        Records: ${square.count}<br>
-        Total Weight: ${square.totalWeight.toFixed(1)}<br>
-        Grid Index: (${square.latIndex}, ${square.lonIndex})<br>
-        Grid Center: ${(square.gridLat + GRID_SIZE_LAT_DEGREES/2).toFixed(6)}, ${(square.gridLon + GRID_SIZE_LON_DEGREES/2).toFixed(6)}<br>
-        Grid Size: ${(GRID_SIZE_LAT_DEGREES * 111).toFixed(1)}km × ${(GRID_SIZE_LON_DEGREES * 111 * Math.cos(REFERENCE_LATITUDE * Math.PI / 180)).toFixed(1)}km
-      `);
+      // Add grid layer to map
+      gridLayer.addTo(map);
+      totalVisibleSquares += accurateGridSquares.length;
+    }
+    
+    // Process less accurate records
+    if (lessAccurateRecords.length > 0) {
+      console.log(`Processing ${lessAccurateRecords.length} less accurate records`);
       
-      gridLayer.addLayer(rectangle);
-    });
+      // Sort less accurate records by accuracy (most accurate first)
+      const sortedLessAccurateRecords = lessAccurateRecords.sort((a, b) => a.accuracy - b.accuracy);
+      
+      // Create new layer group for less accurate records
+      lessAccurateLayer = L.layerGroup();
+      
+      let validLessAccurateCount = 0;
+      const validLessAccuratePolygons = []; // Track valid polygons for overlap checking
+      
+      sortedLessAccurateRecords.forEach((record, index) => {
+        try {
+          const polygonCoords = parseWGS84WKT(record.wgs84WKT);
+          if (!polygonCoords) {
+            return; // Skip invalid polygons
+          }
+          
+          // Check if this polygon overlaps with any accurate grid squares
+          if (checkPolygonOverlap(polygonCoords, accurateGridSquares)) {
+            console.log(`Discarding less accurate record ${index} (accuracy: ${record.accuracy}m) due to overlap with accurate grid`);
+            return; // Skip overlapping polygons
+          }
+          
+          // Check if this polygon overlaps with any other less accurate records already processed
+          if (checkPolygonOverlapWithOthers(polygonCoords, validLessAccuratePolygons)) {
+            console.log(`Discarding less accurate record ${index} (accuracy: ${record.accuracy}m) due to overlap with other less accurate records`);
+            return; // Skip overlapping polygons
+          }
+          
+          // Create polygon for this less accurate record
+          const polygon = L.polygon(polygonCoords, {
+            color: '#ff6b35',  // Orange border
+            weight: 2,
+            fillColor: '#ff6b35',
+            fillOpacity: 0.3   // More transparent
+          });
+          
+          // Add popup with information
+          const centerInfo = record.centerPoint ? 
+            `Center: ${record.centerPoint.lat.toFixed(6)}, ${record.centerPoint.lon.toFixed(6)}<br>` : '';
+          
+          polygon.bindPopup(`
+            <strong>Less Accurate Record</strong><br>
+            Weight: ${record.weight}<br>
+            Accuracy: ${record.accuracy}m<br>
+            ${centerInfo}
+            Source: WGS84 WKT Polygon
+          `);
+          
+          lessAccurateLayer.addLayer(polygon);
+          validLessAccuratePolygons.push(polygonCoords); // Add to valid polygons for future overlap checking
+          validLessAccurateCount++;
+          
+        } catch (error) {
+          console.warn(`Error processing less accurate record ${index}:`, error);
+        }
+      });
+      
+      // Add less accurate layer to map
+      if (validLessAccurateCount > 0) {
+        lessAccurateLayer.addTo(map);
+        totalVisibleSquares += validLessAccurateCount;
+        console.log(`Added ${validLessAccurateCount} non-overlapping less accurate records (sorted by accuracy, most accurate first)`);
+      }
+    }
     
-    // Add grid layer to map
-    gridLayer.addTo(map);
-    
-    // Fit map to show all grid squares
+    // Fit map to show all visible elements
     try {
-      const group = new L.featureGroup(gridLayer.getLayers());
-      const bounds = group.getBounds();
+      const allLayers = [];
+      if (gridLayer) allLayers.push(...gridLayer.getLayers());
+      if (lessAccurateLayer) allLayers.push(...lessAccurateLayer.getLayers());
       
-      if (bounds && bounds.isValid()) {
-        const paddedBounds = bounds.pad(0.1);
-        map.fitBounds(paddedBounds, { maxZoom: 10 });
+      if (allLayers.length > 0) {
+        const group = new L.featureGroup(allLayers);
+        const bounds = group.getBounds();
+        
+        if (bounds && bounds.isValid()) {
+          const paddedBounds = bounds.pad(0.1);
+          map.fitBounds(paddedBounds, { maxZoom: 10 });
+        } else {
+          // Fallback: set a reasonable view of Finland
+          map.setView([61.0, 25.0], 6);
+        }
       } else {
         // Fallback: set a reasonable view of Finland
         map.setView([61.0, 25.0], 6);
@@ -273,6 +521,8 @@
       console.warn('Error fitting bounds:', error);
       map.setView([61.0, 25.0], 6);
     }
+    
+    return totalVisibleSquares;
   }
 
   function setStatus(message, type) {
@@ -298,19 +548,22 @@
       }
 
       currentDataset = dataset;
-      const points = extractWGS84Coordinates(dataset);
+      const { accuratePoints, lessAccurateRecords } = extractWGS84Coordinates(dataset);
       
-      if (points.length === 0) {
+      if (accuratePoints.length === 0 && lessAccurateRecords.length === 0) {
         setStatus('No WGS84 coordinates found in this dataset.', 'error');
         return;
       }
 
-      setStatus(`Loaded ${points.length} points from dataset.`, 'ok');
+      setStatus(`Loaded ${accuratePoints.length} accurate points and ${lessAccurateRecords.length} less accurate records.`, 'ok');
       
-      const gridSquares = calculateGridSquares(points);
-      setStatus(`Found ${gridSquares.length} grid squares with data.`, 'ok');
+      // Process accurate points into 2km grid squares
+      const accurateGridSquares = accuratePoints.length > 0 ? calculateGridSquares(accuratePoints) : [];
       
-      createOrUpdateGrid(gridSquares);
+      // Create visualization with both accurate and less accurate records
+      const totalVisibleSquares = createOrUpdateGrid(accurateGridSquares, lessAccurateRecords);
+      
+      setStatus(`Displaying ${totalVisibleSquares} visible squares (${accurateGridSquares.length} accurate + ${totalVisibleSquares - accurateGridSquares.length} less accurate).`, 'ok');
 
     } catch (error) {
       console.error('Error loading dataset:', error);
