@@ -35,6 +35,10 @@ def raw():
 def heatmap_db():
     return render_template("heatmap_db.html")
 
+@app.route("/convex_hull")
+def convex_hull():
+    return render_template("convex_hull.html")
+
 @app.route("/2kmgrids")
 def grid2km():
     return render_template("2kmgrids.html")
