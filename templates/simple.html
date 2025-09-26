@@ -5,6 +5,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Data Analyzer</title>
     <link rel="stylesheet" href="/static/search.css">
+    <style>
+        .fetch-progress {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .fetch-progress h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        #progressLog {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #ffffff;
+            border: 1px solid #ced4da;
+            border-radius: 3px;
+            padding: 10px;
+        }
+        
+        .progress-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .progress-entry.success {
+            color: #28a745;
+        }
+        
+        .progress-entry.error {
+            color: #dc3545;
+        }
+        
+        .progress-summary {
+            font-weight: bold;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #dee2e6;
+            color: #495057;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -20,6 +67,10 @@
         <div id="response" class="response" style="display: none;">
             <h3>API Response:</h3>
             <div id="responseData"></div>
+            <div id="fetchProgress" class="fetch-progress" style="display: none;">
+                <h4>Fetching Progress:</h4>
+                <div id="progressLog"></div>
+            </div>
             <div id="saveSection" style="margin-top: 15px; display: none;">
                 <div class="input-group">
                     <label for="datasetName">Dataset Name (optional, max 256 chars):</label>
@@ -104,6 +155,32 @@
             }
         }
         
+        // Helper function to add progress log entry
+        function addProgressLog(message, type = 'success') {
+            const progressLog = document.getElementById('progressLog');
+            const entry = document.createElement('div');
+            entry.className = `progress-entry ${type}`;
+            entry.textContent = message;
+            progressLog.appendChild(entry);
+            progressLog.scrollTop = progressLog.scrollHeight;
+        }
+        
+        // Helper function to update progress summary
+        function updateProgressSummary(pagesFetched, totalRecords, totalTime) {
+            const progressLog = document.getElementById('progressLog');
+            const existingSummary = progressLog.querySelector('.progress-summary');
+            if (existingSummary) {
+                existingSummary.remove();
+            }
+            
+            const summary = document.createElement('div');
+            summary.className = 'progress-summary';
+            summary.innerHTML = `
+                <div>Pages fetched: ${pagesFetched} | Total records: ${totalRecords} | Total time: ${totalTime.toFixed(2)}s</div>
+            `;
+            progressLog.appendChild(summary);
+        }
+        
         // Fetch all pages of data
         async function fetchAllPages(baseUrl, config) {
             const allResults = [];
@@ -111,11 +188,19 @@
             let totalRecords = 0;
             let lastPage = 1;
             let pageSize = 100;
+            let totalTime = 0;
+            const startTime = Date.now();
             
             isPaginationInProgress = true;
             
+            // Show progress section
+            document.getElementById('fetchProgress').style.display = 'block';
+            document.getElementById('progressLog').innerHTML = '';
+            
             try {
                 while (currentPage <= 10 && totalRecords < 1000) {
+                    const pageStartTime = Date.now();
+                    
                     // Build the base query string
                     let apiQuery = `access_token=${encodeURIComponent(config.access_token)}&pageSize=${pageSize}&page=${currentPage}&cache=true&useIdentificationAnnotations=true&includeSubTaxa=true&includeNonValidTaxa=true&individualCountMin=1&includeNullLoadDates=false&qualityIssues=NO_ISSUES&selected=unit.interpretations.recordQuality,document.linkings.collectionQuality,unit.linkings.taxon.taxonomicOrder,unit.abundanceString,gathering.displayDateTime,gathering.interpretations.countryDisplayname,gathering.interpretations.biogeographicalProvinceDisplayname,gathering.locality,document.collectionId,document.documentId,gathering.team,unit.linkings.taxon.vernacularName,unit.linkings.taxon.scientificName,unit.linkings.taxon.cursiveName,unit.linkings.taxon.latestRedListStatusFinland,unit.linkings.taxon.primaryHabitat,gathering.conversions.dayOfYearBegin,gathering.conversions.dayOfYearEnd,unit.det,unit.abundanceUnit,unit.interpretations.individualCount,unit.lifeStage,unit.sex,unit.atlasCode,unit.atlasClass,gathering.conversions.wgs84CenterPoint.lat,gathering.conversions.wgs84CenterPoint.lon,gathering.conversions.eurefCenterPoint.lat,gathering.conversions.eurefCenterPoint.lon,gathering.interpretations.coordinateAccuracy,gathering.conversions.wgs84WKT,gathering.conversions.ykj10kmCenter,unit.recordBasis,unit.notes,unit.unitId,unit.linkings.taxon.occurrenceCountFinland,unit.unitId,document.documentId`;
 
@@ -130,6 +215,8 @@
                     // Final API URL
                     const apiUrl = `${config.base_url}?${apiQuery}`;
                     
+                    addProgressLog(`Fetching page ${currentPage}...`);
+                    
                     const response = await fetch(apiUrl);
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
@@ -137,10 +224,16 @@
                     
                     const data = await response.json();
                     
+                    const pageTime = (Date.now() - pageStartTime) / 1000;
+                    totalTime += pageTime;
+                    
                     // Store first page data for metadata
                     if (currentPage === 1) {
                         lastPage = data.lastPage || 1;
                         pageSize = data.pageSize || 100;
+                        addProgressLog(`Page ${currentPage}: ${data.results ? data.results.length : 0} records fetched in ${pageTime.toFixed(2)}s (Total available: ${data.total || 'unknown'})`);
+                    } else {
+                        addProgressLog(`Page ${currentPage}: ${data.results ? data.results.length : 0} records fetched in ${pageTime.toFixed(2)}s`);
                     }
                     
                     // Add results to our collection
@@ -149,13 +242,20 @@
                         totalRecords += data.results.length;
                     }
                     
+                    // Update progress summary
+                    updateProgressSummary(currentPage, totalRecords, totalTime);
+                    
                     // Check if we've reached the end
                     if (currentPage >= lastPage || (data.results && data.results.length === 0)) {
+                        addProgressLog(`Reached end of data (page ${currentPage} of ${lastPage})`);
                         break;
                     }
                     
                     currentPage++;
                 }
+                
+                const totalElapsedTime = (Date.now() - startTime) / 1000;
+                addProgressLog(`Fetching completed! Total time: ${totalElapsedTime.toFixed(2)}s`, 'success');
                 
                 // Create combined dataset
                 const combinedData = {
@@ -177,6 +277,7 @@
                 
             } catch (error) {
                 console.error('Error fetching pages:', error);
+                addProgressLog(`Error on page ${currentPage}: ${error.message}`, 'error');
                 throw error;
             } finally {
                 isPaginationInProgress = false;
@@ -277,6 +378,7 @@
                             <a href="/stats?id=${dataset.id}" class="view-stats-btn">View Stats</a>
                             <a href="/raw?id=${dataset.id}" class="view-raw-btn">View Raw</a>
                             <a href="/heatmap_db?id=${dataset.id}" class="view-heatmap-btn">View Heatmap</a>
+                            <a href="/2kmgrids?id=${dataset.id}" class="view-grid-btn">View 2km Grid</a>
                             <button onclick="removeDataset('${dataset.id}')" class="remove-btn">Remove</button>
                         </div>
                     </div>
@@ -385,12 +487,14 @@
             const responseDiv = document.getElementById('response');
             const responseData = document.getElementById('responseData');
             const errorDiv = document.getElementById('error');
+            const fetchProgress = document.getElementById('fetchProgress');
             
             // Show loading state
             parseBtn.disabled = true;
             parseBtn.textContent = 'Fetching all pages...';
             responseDiv.style.display = 'block';
-            responseData.innerHTML = '<div class="loading">Fetching all pages... This may take a moment.</div>';
+            responseData.innerHTML = '';
+            fetchProgress.style.display = 'none';
             errorDiv.style.display = 'none';
             
             try {
@@ -440,11 +544,12 @@
             } catch (error) {
                 console.error('API call error:', error);
                 responseData.innerHTML = '';
+                fetchProgress.style.display = 'none';
                 showError(`Error: ${error.message}`);
             } finally {
                 // Hide loading state
                 parseBtn.disabled = false;
-                parseBtn.textContent = 'Parse URL & Call API';
+                parseBtn.textContent = 'Get data';
             }
         }
         
@@ -466,8 +571,10 @@
         document.getElementById('urlInput').addEventListener('input', function() {
             const errorDiv = document.getElementById('error');
             const responseDiv = document.getElementById('response');
+            const fetchProgress = document.getElementById('fetchProgress');
             errorDiv.style.display = 'none';
             responseDiv.style.display = 'none';
+            fetchProgress.style.display = 'none';
             document.getElementById('saveSection').style.display = 'none';
             document.getElementById('saveDatasetBtn').disabled = true;
             
