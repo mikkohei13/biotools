@@ -97,6 +97,13 @@
         <div id="controls" class="controls" style="display: none;">
             <h4>3D Controls</h4>
             <p>Click and drag to rotate the view. Scroll to zoom in/out.</p>
+            <div style="margin: 15px 0;">
+                <label for="zAxisSelect"><strong>Z-axis (depth):</strong></label>
+                <select id="zAxisSelect" onchange="updateZAxis()" style="margin-left: 10px; padding: 5px;">
+                    <option value="year">Year (from displayDateTime)</option>
+                    <option value="dayOfYear">Day of Year (from dayOfYearBegin)</option>
+                </select>
+            </div>
             <button id="resetViewBtn" class="copy-btn" onclick="resetView()">Reset View</button>
             <div id="pointCount"></div>
         </div>
@@ -120,7 +127,10 @@
         let currentDataset = null;
         let scene, camera, renderer, controls;
         let pointCloud;
+        let boundingBox;
         let initialCameraPosition, dataCenter, initialLookAt;
+        let currentZAxisMode = 'year';
+        let currentPoints = [];
         
         // Initialize IndexedDB
         function initDB() {
@@ -175,33 +185,61 @@
         // Parse data points from dataset
         function parseDataPoints(dataset) {
             console.log('Parsing data points from dataset:', dataset);
+            console.log('Z-axis mode:', currentZAxisMode);
             const points = [];
             const results = dataset.data.results || [];
             console.log('Number of results to process:', results.length);
             
             let validPoints = 0;
             let invalidPoints = 0;
+            let filteredPoints = 0;
             
             for (let i = 0; i < results.length; i++) {
                 const result = results[i];
                 const gathering = result.gathering;
                 
-                if (gathering && gathering.conversions && gathering.conversions.eurefCenterPoint && gathering.displayDateTime) {
+                if (gathering && gathering.conversions && gathering.conversions.eurefCenterPoint) {
                     const lat = gathering.conversions.eurefCenterPoint.lat;
                     const lon = gathering.conversions.eurefCenterPoint.lon;
-                    const year = parseInt(gathering.displayDateTime.substring(0, 4));
                     
-                    console.log(`Point ${i}: lat=${lat}, lon=${lon}, year=${year}, dateTime=${gathering.displayDateTime}`);
+                    let zValue = null;
+                    let zLabel = '';
                     
-                    if (!isNaN(year) && lat && lon) {
+                    if (currentZAxisMode === 'year') {
+                        // Use year from displayDateTime
+                        if (gathering.displayDateTime) {
+                            zValue = parseInt(gathering.displayDateTime.substring(0, 4));
+                            zLabel = 'year';
+                        }
+                    } else if (currentZAxisMode === 'dayOfYear') {
+                        // Use dayOfYearBegin, but check dayOfYearEnd filter
+                        if (gathering.conversions.dayOfYearBegin !== undefined) {
+                            const dayBegin = gathering.conversions.dayOfYearBegin;
+                            const dayEnd = gathering.conversions.dayOfYearEnd;
+                            
+                            // Filter out records where dayOfYearEnd is more than 14 days after dayOfYearBegin
+                            if (dayEnd !== undefined && (dayEnd - dayBegin) > 14) {
+                                console.log(`Point ${i} filtered out: dayOfYear range too large (${dayBegin}-${dayEnd})`);
+                                filteredPoints++;
+                                continue;
+                            }
+                            
+                            zValue = dayBegin;
+                            zLabel = 'dayOfYear';
+                        }
+                    }
+                    
+                    console.log(`Point ${i}: lat=${lat}, lon=${lon}, ${zLabel}=${zValue}, dateTime=${gathering.displayDateTime || 'N/A'}`);
+                    
+                    if (zValue !== null && !isNaN(zValue) && lat && lon) {
                         points.push({
                             x: lon,  // X = longitude
                             y: lat,  // Y = latitude  
-                            z: year  // Z = year
+                            z: zValue  // Z = year or dayOfYear
                         });
                         validPoints++;
                     } else {
-                        console.log(`Invalid point ${i}: year=${year}, lat=${lat}, lon=${lon}`);
+                        console.log(`Invalid point ${i}: ${zLabel}=${zValue}, lat=${lat}, lon=${lon}`);
                         invalidPoints++;
                     }
                 } else {
@@ -215,7 +253,7 @@
                 }
             }
             
-            console.log(`Parsed ${validPoints} valid points, ${invalidPoints} invalid points`);
+            console.log(`Parsed ${validPoints} valid points, ${invalidPoints} invalid points, ${filteredPoints} filtered out`);
             console.log('Sample points:', points.slice(0, 5));
             return points;
         }
@@ -481,7 +519,7 @@
                 transparent: true,
                 opacity: 0.3
             });
-            const boundingBox = new THREE.Mesh(boxGeometry, boxMaterial);
+            boundingBox = new THREE.Mesh(boxGeometry, boxMaterial);
             boundingBox.position.set(
                 (Math.min(...xValues) + Math.max(...xValues)) / 2,
                 (Math.min(...yValues) + Math.max(...yValues)) / 2,
@@ -518,11 +556,12 @@
             console.log('Camera position:', camera.position);
             
             // Update info panel
+            const zAxisLabel = currentZAxisMode === 'year' ? 'Year' : 'Day of Year';
             document.getElementById('pointCount').innerHTML = `
                 <strong>Data Points:</strong> ${points.length}<br>
                 <strong>X (Longitude):</strong> ${bounds.minX.toFixed(0)} to ${bounds.maxX.toFixed(0)}<br>
                 <strong>Y (Latitude):</strong> ${bounds.minY.toFixed(0)} to ${bounds.maxY.toFixed(0)}<br>
-                <strong>Z (Year):</strong> ${bounds.minZ} to ${bounds.maxZ}
+                <strong>Z (${zAxisLabel}):</strong> ${bounds.minZ} to ${bounds.maxZ}
             `;
         }
         
@@ -530,6 +569,39 @@
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
+        }
+        
+        // Update Z-axis mode and regenerate visualization
+        function updateZAxis() {
+            const zAxisSelect = document.getElementById('zAxisSelect');
+            currentZAxisMode = zAxisSelect.value;
+            console.log('Z-axis mode changed to:', currentZAxisMode);
+            
+            if (currentDataset && scene) {
+                // Re-parse data with new Z-axis mode
+                const points = parseDataPoints(currentDataset);
+                currentPoints = points;
+                
+                if (points.length === 0) {
+                    showError('No valid data points found with the selected Z-axis mode.');
+                    return;
+                }
+                
+                // Remove old bounding box
+                if (boundingBox) {
+                    scene.remove(boundingBox);
+                    console.log('Old bounding box removed');
+                }
+                
+                // Recreate point cloud
+                createPointCloud(points);
+                
+                // Reset camera to initial position
+                if (initialCameraPosition && initialLookAt) {
+                    camera.position.copy(initialCameraPosition);
+                    camera.lookAt(initialLookAt);
+                }
+            }
         }
         
         // Reset camera to initial orientation
@@ -630,6 +702,7 @@
                 
                 // Parse data points
                 const points = parseDataPoints(dataset);
+                currentPoints = points;
                 if (points.length === 0) {
                     showError('No valid data points found in the dataset.');
                     hideLoading();
