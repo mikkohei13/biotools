@@ -97,6 +97,7 @@
         <div id="controls" class="controls" style="display: none;">
             <h4>3D Controls</h4>
             <p>Click and drag to rotate the view. Scroll to zoom in/out.</p>
+            <button id="resetViewBtn" class="copy-btn" onclick="resetView()">Reset View</button>
             <div id="pointCount"></div>
         </div>
         
@@ -119,6 +120,7 @@
         let currentDataset = null;
         let scene, camera, renderer, controls;
         let pointCloud;
+        let initialCameraPosition, dataCenter, initialLookAt;
         
         // Initialize IndexedDB
         function initDB() {
@@ -358,9 +360,9 @@
             const centerY = (bounds.minY + bounds.maxY) / 2;
             const centerZ = (bounds.minZ + bounds.maxZ) / 2;
             
-            // Scale Z-axis so that oldest year = 0, newest year = 200
+            // Scale Z-axis so that oldest year = -200, newest year = 200
             // This ensures consistent visual scaling regardless of year range
-            const zScale = 200 / zRange; // Scale so total range = 200
+            const zScale = 400 / zRange; // Scale so total range = 400
             
             console.log('Center point:', { centerX, centerY, centerZ });
             console.log('Scale factors:', { xyScale: scale, zScale });
@@ -373,7 +375,7 @@
                 const point = points[i];
                 const x = (point.x - centerX) / scale;
                 const y = (point.y - centerY) / scale;
-                const z = (point.z - bounds.minZ) * zScale; // Scale years: oldest=0, newest=200
+                const z = (point.z - bounds.minZ) * zScale - 200; // Scale years: oldest=-200, newest=200
                 
                 positions[i * 3] = x;
                 positions[i * 3 + 1] = y;
@@ -466,18 +468,6 @@
             console.log('Point cloud added to scene:', pointCloud);
             console.log('Scene children count:', scene.children.length);
             
-            // Add axes helper
-            const axesHelper = new THREE.AxesHelper(500);
-            scene.add(axesHelper);
-            console.log('Axes helper added');
-            
-            // Add a test cube to verify Three.js is working
-            const testGeometry = new THREE.BoxGeometry(50, 50, 50);
-            const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            const testCube = new THREE.Mesh(testGeometry, testMaterial);
-            testCube.position.set(0, 0, 0);
-            scene.add(testCube);
-            console.log('Test cube added at origin');
             
             // Add bounding box to show data extent
             const boxGeometry = new THREE.BoxGeometry(
@@ -512,12 +502,18 @@
                 Math.max(...zValues) - Math.min(...zValues)
             );
             
+            // Position camera so Z-axis points towards viewer, X→right, Y↑up
             camera.position.set(
-                dataCenter.x + maxRange * 1.5,
-                dataCenter.y + maxRange * 1.5,
-                dataCenter.z + maxRange * 1.5
+                dataCenter.x,
+                dataCenter.y,
+                dataCenter.z + maxRange * 2
             );
             camera.lookAt(dataCenter.x, dataCenter.y, dataCenter.z);
+            
+            // Store initial camera position and look-at point for reset functionality
+            initialCameraPosition = camera.position.clone();
+            initialLookAt = new THREE.Vector3(dataCenter.x, dataCenter.y, dataCenter.z);
+            
             console.log('Camera positioned to view data center:', dataCenter);
             console.log('Camera position:', camera.position);
             
@@ -534,6 +530,19 @@
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
+        }
+        
+        // Reset camera to initial orientation
+        function resetView() {
+            if (camera && initialCameraPosition && initialLookAt) {
+                camera.position.copy(initialCameraPosition);
+                camera.lookAt(initialLookAt);
+                console.log('View reset to initial orientation');
+                console.log('Camera position:', camera.position);
+                console.log('Camera lookAt:', initialLookAt);
+            } else {
+                console.log('Reset failed - missing camera or initial position data');
+            }
         }
         
         // Debug function to log scene state
