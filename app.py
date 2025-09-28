@@ -43,6 +43,10 @@ def convex_hull():
 def grid2km():
     return render_template("2kmgrids.html")
 
+@app.route("/3d")
+def three_d():
+    return render_template("3d.html")
+
 @app.route("/api/config")
 def get_config():
     return jsonify({

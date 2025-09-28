@@ -5,6 +5,81 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dataset Statistics</title>
     <link rel="stylesheet" href="/static/search.css">
+    <style>
+        .chart-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .chart-section h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.4em;
+        }
+        
+        .bar-chart {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .bar-item {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 15px;
+            align-items: center;
+            min-height: 40px;
+        }
+        
+        .bar-label {
+            font-weight: 500;
+            color: #555;
+            text-align: right;
+            font-size: 0.9em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .bar-container {
+            position: relative;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+        }
+        
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #0056b3);
+            border-radius: 15px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+        
+        .bar-value {
+            position: absolute;
+            right: 10px;
+            font-weight: bold;
+            color: #333;
+            font-size: 0.9em;
+            z-index: 1;
+        }
+        
+        .bar-item:hover .bar-fill {
+            background: linear-gradient(90deg, #0056b3, #004085);
+        }
+        
+        .bar-item:hover .bar-label {
+            color: #007bff;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -102,7 +177,8 @@
                 uniqueObservers: new Set(),
                 dateRange: { earliest: null, latest: null },
                 recordBasisCounts: {},
-                habitatCounts: {}
+                individualCounts: [],
+                observerCounts: {}
             };
             
             results.forEach(record => {
@@ -120,6 +196,7 @@
                 if (record.gathering?.team) {
                     record.gathering.team.forEach(observer => {
                         stats.uniqueObservers.add(observer);
+                        stats.observerCounts[observer] = (stats.observerCounts[observer] || 0) + 1;
                     });
                 }
                 
@@ -138,11 +215,35 @@
                 const recordBasis = record.unit?.recordBasis || 'Unknown';
                 stats.recordBasisCounts[recordBasis] = (stats.recordBasisCounts[recordBasis] || 0) + 1;
                 
-                // Habitat
-                const habitat = record.unit?.linkings?.taxon?.primaryHabitat?.habitat || 'Unknown';
-                stats.habitatCounts[habitat] = (stats.habitatCounts[habitat] || 0) + 1;
+                // Individual count
+                const individualCount = record.unit?.interpretations?.individualCount;
+                if (individualCount !== undefined && individualCount !== null) {
+                    stats.individualCounts.push(individualCount);
+                }
                 
             });
+            
+            // Calculate individual count statistics
+            if (stats.individualCounts.length > 0) {
+                const sortedCounts = stats.individualCounts.sort((a, b) => a - b);
+                stats.individualCountStats = {
+                    min: sortedCounts[0],
+                    max: sortedCounts[sortedCounts.length - 1],
+                    sum: sortedCounts.reduce((sum, count) => sum + count, 0),
+                    average: sortedCounts.reduce((sum, count) => sum + count, 0) / sortedCounts.length,
+                    median: sortedCounts.length % 2 === 0 
+                        ? (sortedCounts[sortedCounts.length / 2 - 1] + sortedCounts[sortedCounts.length / 2]) / 2
+                        : sortedCounts[Math.floor(sortedCounts.length / 2)]
+                };
+            } else {
+                stats.individualCountStats = {
+                    min: 0,
+                    max: 0,
+                    sum: 0,
+                    average: 0,
+                    median: 0
+                };
+            }
                         
             return stats;
         }
@@ -190,10 +291,10 @@
             const sortedRecordBasis = Object.entries(stats.recordBasisCounts)
                 .sort(([,a], [,b]) => b - a);
             
-            // Sort habitat counts
-            const sortedHabitats = Object.entries(stats.habitatCounts)
+            // Sort observer counts
+            const sortedObservers = Object.entries(stats.observerCounts)
                 .sort(([,a], [,b]) => b - a)
-                .slice(0, 10); // Top 10 habitats
+                .slice(0, 10); // Top 10 observers
             
             statsContentDiv.innerHTML = `
                 <div class="stats-grid">
@@ -233,12 +334,44 @@
                     </div>
                     
                     <div class="stat-card">
-                        <h4>Top Habitats</h4>
-                        ${sortedHabitats.map(([habitat, count]) => `
-                            <div class="stat-item">
-                                <strong>${habitat.split('/').pop()}:</strong> ${count}
-                            </div>
-                        `).join('')}
+                        <h4>Individual Count Statistics</h4>
+                        <div class="stat-item">
+                            <strong>Min:</strong> ${stats.individualCountStats.min}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Max:</strong> ${stats.individualCountStats.max}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Average:</strong> ${stats.individualCountStats.average.toFixed(2)}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Median:</strong> ${stats.individualCountStats.median}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Sum:</strong> ${stats.individualCountStats.sum}
+                        </div>
+                        <div class="stat-item">
+                            <strong>Records with Count:</strong> ${stats.individualCounts.length}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="chart-section">
+                    <h3>Top 10 Observers</h3>
+                    <div class="bar-chart">
+                        ${sortedObservers.map(([observer, count], index) => {
+                            const maxCount = sortedObservers[0][1];
+                            const percentage = (count / maxCount) * 100;
+                            return `
+                                <div class="bar-item">
+                                    <div class="bar-label" title="${observer}">${observer}</div>
+                                    <div class="bar-container">
+                                        <div class="bar-fill" style="width: ${percentage}%"></div>
+                                        <div class="bar-value">${count}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             `;
