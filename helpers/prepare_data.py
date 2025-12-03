@@ -101,7 +101,7 @@ def convert_grid_cell_to_resolution(grid_cell, target_resolution_km):
 
 
 def main():
-    resolution_km = 1  # 1 | 10 | 100
+    resolution_km = 100  # 1 | 10 | 100
     
     # Validate resolution
     if resolution_km not in [1, 10, 100]:

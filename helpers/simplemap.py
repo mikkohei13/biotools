@@ -3,6 +3,9 @@ This module creates a simple matplotlib map of Finland with data overlays.
 It overlays colored squares representing data points on a grid system.
 
 The squares_data dictionary contains grid coordinates in the format "northing:easting".
+Each value is a dictionary with "color" (hex color code) and "value" (numeric value).
+Example: {"67:34": {"color": "#ff0000", "value": 0.85}}
+
 The grid size is determined by the number of digits in each coordinate:
 - 2 digits (e.g., "67:34") = 100km x 100km squares. Multiply by 100000 to get SW coordinate.
 - 3 digits (e.g., "668:338") = 10km x 10km squares. Multiply by 10000 to get SW coordinate.
@@ -23,7 +26,9 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
     
     Args:
         squares_data (dict): Dictionary with grid coordinates as keys (format "northing:easting")
-                           and hex color codes as values. Grid size is determined by digit count:
+                           and dictionaries as values containing "color" (hex color code) and "value" (numeric).
+                           Example: {"67:34": {"color": "#ff0000", "value": 0.85}}
+                           Grid size is determined by digit count:
                            - 2 digits (e.g., "67:34") = 100km squares
                            - 3 digits (e.g., "668:338") = 10km squares
                            - 4 digits (e.g., "6789:3458") = 1km squares
@@ -83,7 +88,18 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
             ax.plot(x_coords, y_coords, 'k-', linewidth=0.5)
     
     # Add colored squares
-    for square_key, color in squares_data.items():
+    for square_key, data in squares_data.items():
+        # Extract color and value from the data dictionary
+        if not isinstance(data, dict):
+            print(f"Warning: Invalid data format for {square_key}. Expected dict with 'color' and 'value' keys.")
+            continue
+        
+        color = data.get('color')
+        value = data.get('value')  # Extract value (not used for rendering, but available)
+        
+        if color is None:
+            print(f"Warning: Missing 'color' key for {square_key}. Skipping.")
+            continue
         # Parse the key (e.g., "668:338", "67:34", "6789:3458")
         try:
             northing_str, easting_str = square_key.split(':')
@@ -153,8 +169,12 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
     return True
 
 
-# Allow running as a script for backward compatibility
+# Allow running as a script for testing
 if __name__ == "__main__":
-    squares_data = {"668:338": "#ff0000", "669:338": "#00ff00", "666:333": "#0000ff"}
+    squares_data = {
+        "668:338": {"color": "#ff0000", "value": 0.85},
+        "669:338": {"color": "#00ff00", "value": 0.92},
+        "666:333": {"color": "#0000ff", "value": 0.45}
+    }
     output_file = "results/simplemap.png"
     create_finland_map(squares_data, output_file)
