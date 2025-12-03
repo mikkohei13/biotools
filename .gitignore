@@ -3,3 +3,6 @@ __pycache__/*
 sampledata/*
 static/example-data.tsv
 config.py
+
+**/secret/**
+**/results/**

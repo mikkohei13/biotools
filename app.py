@@ -47,6 +47,10 @@ def grid2km():
 def three_d():
     return render_template("3d.html")
 
+@app.route("/analyze")
+def analyze():
+    return render_template("analyze.html")
+
 @app.route("/api/config")
 def get_config():
     return jsonify({
