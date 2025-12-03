@@ -9,7 +9,7 @@ import json
 from collections import defaultdict
 
 input_file = "../secret/HBF.113917-pentatomidae-suomi/occurrences.txt"
-output_file = "../sampledata/celldata_pentatomidae_speciescount.json"
+# Output file will be set based on resolution_km in main()
 
 
 def hex_color_ramp(value, min_val, max_val):
@@ -43,8 +43,78 @@ def hex_color_ramp(value, min_val, max_val):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+def convert_grid_cell_to_resolution(grid_cell, target_resolution_km):
+    """
+    Convert a grid cell coordinate to the specified resolution.
+    
+    Args:
+        grid_cell (str): Grid cell in format "northing:easting" (e.g., "6789:3458")
+        target_resolution_km (int): Target resolution in kilometers (1, 10, or 100)
+    
+    Returns:
+        str: Grid cell in the target resolution format, or None if conversion fails
+    """
+    try:
+        northing_str, easting_str = grid_cell.split(':')
+        
+        # Determine number of digits needed for target resolution
+        if target_resolution_km == 1:
+            digits_needed = 4
+        elif target_resolution_km == 10:
+            digits_needed = 3
+        elif target_resolution_km == 100:
+            digits_needed = 2
+        else:
+            print(f"Warning: Unsupported resolution {target_resolution_km}km. Use 1, 10, or 100.")
+            return None
+        
+        # Convert to integers and truncate to desired number of digits
+        # We do this by dividing by the appropriate power of 10 and truncating
+        northing = int(northing_str)
+        easting = int(easting_str)
+        
+        # Calculate divisor based on current number of digits and target
+        # If input has more digits than needed, truncate from the right
+        current_northing_digits = len(northing_str)
+        current_easting_digits = len(easting_str)
+        
+        if current_northing_digits > digits_needed:
+            divisor = 10 ** (current_northing_digits - digits_needed)
+            northing = northing // divisor
+        elif current_northing_digits < digits_needed:
+            # Pad with zeros if input has fewer digits (shouldn't happen normally)
+            northing = northing * (10 ** (digits_needed - current_northing_digits))
+        
+        if current_easting_digits > digits_needed:
+            divisor = 10 ** (current_easting_digits - digits_needed)
+            easting = easting // divisor
+        elif current_easting_digits < digits_needed:
+            # Pad with zeros if input has fewer digits (shouldn't happen normally)
+            easting = easting * (10 ** (digits_needed - current_easting_digits))
+        
+        # Format with leading zeros if needed to match exact digit count
+        return f"{northing:0{digits_needed}d}:{easting:0{digits_needed}d}"
+    
+    except (ValueError, AttributeError) as e:
+        print(f"Warning: Invalid grid cell format '{grid_cell}': {e}")
+        return None
+
+
 def main():
-    # Dictionary to store unique species per grid cell
+    resolution_km = 1  # 1 | 10 | 100
+    
+    # Validate resolution
+    if resolution_km not in [1, 10, 100]:
+        print(f"Error: Invalid resolution {resolution_km}km. Must be 1, 10, or 100.")
+        return
+    
+    # Set output file based on resolution
+    output_file = f"../sampledata/celldata_pentatomidae_speciescount_{resolution_km}km.json"
+    
+    print(f"Processing data at {resolution_km}km resolution...")
+    print(f"Output file: {output_file}")
+    
+    # Dictionary to store unique species per grid cell (at target resolution)
     grid_cell_species = defaultdict(set)
     
     # Read the occurrences file
@@ -71,8 +141,13 @@ def main():
             if not grid_cell or not scientific_name:
                 continue
             
+            # Convert grid cell to target resolution
+            converted_grid_cell = convert_grid_cell_to_resolution(grid_cell, resolution_km)
+            if converted_grid_cell is None:
+                continue
+            
             # Add species to the grid cell's set (automatically handles uniqueness)
-            grid_cell_species[grid_cell].add(scientific_name)
+            grid_cell_species[converted_grid_cell].add(scientific_name)
     
     # Count species per grid cell and filter out zero-species cells
     species_counts = {

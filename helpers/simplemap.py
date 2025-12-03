@@ -1,11 +1,14 @@
 """
 This module creates a simple matplotlib map of Finland with data overlays.
-It overlays colored squares representing data points on a 10km x 10km grid system.
+It overlays colored squares representing data points on a grid system.
 
-The squares_data dictionary contains grid coordinates in the format "northing:easting"
-where each coordinate unit represents 10km. For example, "668:338" represents
-a square at northing 6,680,000 meters and easting 3,380,000 meters. Each square is rendered
-as a 10 kilometers x 10 kilometers rectangle with the specified color.
+The squares_data dictionary contains grid coordinates in the format "northing:easting".
+The grid size is determined by the number of digits in each coordinate:
+- 2 digits (e.g., "67:34") = 100km x 100km squares. Multiply by 100000 to get SW coordinate.
+- 3 digits (e.g., "668:338") = 10km x 10km squares. Multiply by 10000 to get SW coordinate.
+- 4 digits (e.g., "6789:3458") = 1km x 1km squares. Multiply by 1000 to get SW coordinate.
+
+Each square is rendered as a rectangle with the appropriate size and specified color.
 """
 
 import json
@@ -16,11 +19,14 @@ from matplotlib.patches import Rectangle
 
 def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12, 16), dpi=150):
     """
-    Create a map of Finland with colored squares overlaid on a 10km x 10km grid.
+    Create a map of Finland with colored squares overlaid on a grid system.
     
     Args:
         squares_data (dict): Dictionary with grid coordinates as keys (format "northing:easting")
-                           and hex color codes as values (e.g., {"668:338": "#ff0000"})
+                           and hex color codes as values. Grid size is determined by digit count:
+                           - 2 digits (e.g., "67:34") = 100km squares
+                           - 3 digits (e.g., "668:338") = 10km squares
+                           - 4 digits (e.g., "6789:3458") = 1km squares
         output_file (str): Path to the output PNG file
         borders_file (str, optional): Path to the Finland borders GeoJSON file.
                                      Defaults to "finland_borders.geojson" in the same directory
@@ -78,22 +84,50 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
     
     # Add colored squares
     for square_key, color in squares_data.items():
-        # Parse the key (e.g., "668:338")
+        # Parse the key (e.g., "668:338", "67:34", "6789:3458")
         try:
             northing_str, easting_str = square_key.split(':')
-            northing = int(northing_str) * 10000
-            easting = int(easting_str) * 10000
+            
+            # Determine grid size based on number of digits
+            # 2 digits = 100km, 3 digits = 10km, 4 digits = 1km
+            northing_digits = len(northing_str)
+            easting_digits = len(easting_str)
+            
+            # Validate that both coordinates have the same number of digits
+            if northing_digits != easting_digits:
+                print(f"Warning: Mismatched coordinate digits in {square_key}. Expected same number of digits.")
+                continue
+            
+            # Determine multiplier and square size based on digit count
+            if northing_digits == 2:
+                # 100km squares: "67:34" -> multiply by 100000
+                multiplier = 100000
+                square_size = 100000
+            elif northing_digits == 3:
+                # 10km squares: "668:338" -> multiply by 10000
+                multiplier = 10000
+                square_size = 10000
+            elif northing_digits == 4:
+                # 1km squares: "6789:3458" -> multiply by 1000
+                multiplier = 1000
+                square_size = 1000
+            else:
+                print(f"Warning: Unsupported coordinate format: {square_key}. Expected 2, 3, or 4 digits per coordinate.")
+                continue
+            
+            northing = int(northing_str) * multiplier
+            easting = int(easting_str) * multiplier
         except ValueError:
             print(f"Warning: Invalid square key format: {square_key}. Expected 'northing:easting'")
             continue
         
-        # Calculate square corners (10x10 km = 10000 meters)
+        # Calculate square corners
         # Southwestern corner: (easting, northing)
-        # Northeastern corner: (easting + 10000, northing + 10000)
+        # Northeastern corner: (easting + square_size, northing + square_size)
         square = Rectangle(
             (easting, northing),  # bottom-left corner (x, y)
-            10000,  # width
-            10000,  # height
+            square_size,  # width
+            square_size,  # height
             facecolor=color,
             edgecolor='none'
         )

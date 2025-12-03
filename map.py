@@ -10,7 +10,7 @@ from helpers.simplemap import create_finland_map
 
 
 data_directory = "sampledata"
-data_filename = "celldata_pentatomidae_speciescount.json"
+data_filename = "celldata_pentatomidae_speciescount_100km.json"
 map_file_path = f"./results/{data_filename}_map.png"
 
 data_file_path = f"{data_directory}/{data_filename}"
