@@ -17,7 +17,7 @@ Each square is rendered as a rectangle with the appropriate size and specified c
 import json
 import os
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Patch
 
 
 def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12, 16), dpi=150):
@@ -87,6 +87,9 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
             # Plot the polygon border
             ax.plot(x_coords, y_coords, 'k-', linewidth=0.5)
     
+    # Collect unique color-value pairs for the legend
+    legend_items = {}  # Dictionary to store unique color-value pairs
+    
     # Add colored squares
     for square_key, data in squares_data.items():
         # Extract color and value from the data dictionary
@@ -100,6 +103,12 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
         if color is None:
             print(f"Warning: Missing 'color' key for {square_key}. Skipping.")
             continue
+        
+        # Store unique color-value pairs for legend
+        # Use color as key, and keep track of values (in case same color has different values)
+        if color not in legend_items:
+            legend_items[color] = value
+        # If same color has different values, we'll use the first one encountered
         # Parse the key (e.g., "668:338", "67:34", "6789:3458")
         try:
             northing_str, easting_str = square_key.split(':')
@@ -148,6 +157,31 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
             edgecolor='none'
         )
         ax.add_patch(square)
+    
+    # Create legend
+    if legend_items:
+        # Sort legend items by value for better readability
+        sorted_items = sorted(legend_items.items(), key=lambda x: x[1] if x[1] is not None else float('-inf'))
+        
+        # Create legend handles and labels
+        legend_handles = []
+        legend_labels = []
+        for color, value in sorted_items:
+            patch = Patch(facecolor=color, edgecolor='black', linewidth=0.5)
+            legend_handles.append(patch)
+            # Format value for display
+            if value is not None:
+                if isinstance(value, float):
+                    label = f"{value:.2f}" if value != int(value) else f"{int(value)}"
+                else:
+                    label = str(value)
+            else:
+                label = "N/A"
+            legend_labels.append(label)
+        
+        # Add legend to the top left corner
+        ax.legend(legend_handles, legend_labels, loc='upper left', framealpha=0.9, 
+                 edgecolor='black', facecolor='white', frameon=True)
     
     # Remove axes for a clean look
     ax.axis('off')

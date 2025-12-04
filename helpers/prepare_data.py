@@ -8,10 +8,6 @@ import csv
 import json
 from collections import defaultdict
 
-input_file = "../secret/HBF.113917-pentatomidae-suomi/occurrences.txt"
-# Output file will be set based on resolution_km in main()
-
-
 def hex_color_ramp(value, min_val, max_val):
     """
     Generate a color from blue (low) to red (high) based on value.
@@ -102,20 +98,31 @@ def convert_grid_cell_to_resolution(grid_cell, target_resolution_km):
 
 def main():
     resolution_km = 100  # 1 | 10 | 100
-    
+
+    input_file = "../secret/HBF.114262-heteroptera/occurrences.txt"
+    output_file = "../sampledata/celldata_heteroptera-speciescount-RESOLUTION.json"
+
+    input_file = "../secret/HBF.114262-heteroptera/occurrences.txt"
+    output_file = "../sampledata/celldata_heteroptera-speciescount-RESOLUTION.json"
+
+    input_file = "../secret/HBF.114297-kaskaat/occurrences.txt"
+    output_file = "../sampledata/celldata_kaskaat-speciescount-RESOLUTION.json"
+
     # Validate resolution
     if resolution_km not in [1, 10, 100]:
         print(f"Error: Invalid resolution {resolution_km}km. Must be 1, 10, or 100.")
         return
     
     # Set output file based on resolution
-    output_file = f"../sampledata/celldata_pentatomidae_speciescount_{resolution_km}km.json"
+    output_file = output_file.replace("RESOLUTION", f"{resolution_km}km")
     
     print(f"Processing data at {resolution_km}km resolution...")
     print(f"Output file: {output_file}")
     
     # Dictionary to store unique species per grid cell (at target resolution)
     grid_cell_species = defaultdict(set)
+    # Dictionary to store total count of occurrences per species
+    species_total_counts = defaultdict(int)
     
     # Read the occurrences file
     # File has 3 header rows: DwC field names, Finnish names, English names
@@ -148,6 +155,8 @@ def main():
             
             # Add species to the grid cell's set (automatically handles uniqueness)
             grid_cell_species[converted_grid_cell].add(scientific_name)
+            # Count total occurrences of each species
+            species_total_counts[scientific_name] += 1
     
     # Count species per grid cell and filter out zero-species cells
     species_counts = {
@@ -167,11 +176,25 @@ def main():
     print(f"Found {len(species_counts)} grid cells with species")
     print(f"Species count range: {min_count} - {max_count}")
     
-    # Create output dictionary with colors
+    # Print all unique species and their total counts
+    print(f"\nUnique species ({len(species_total_counts)} total):")
+    print("-" * 60)
+    # Sort by count (descending), then by name (ascending) for ties
+    sorted_species = sorted(species_total_counts.items(), key=lambda x: (-x[1], x[0]))
+    for species, count in sorted_species:
+        print(f"  {species}: {count}")
+    print("-" * 60)
+    print(f"Total occurrences: {sum(species_total_counts.values())}")
+    print()
+    
+    # Create output dictionary with colors and values
     output_data = {}
     for grid_cell, count in species_counts.items():
         color = hex_color_ramp(count, min_count, max_count)
-        output_data[grid_cell] = color
+        output_data[grid_cell] = {
+            "color": color,
+            "value": count
+        }
     
     # Write to JSON file
     with open(output_file, 'w', encoding='utf-8') as f:

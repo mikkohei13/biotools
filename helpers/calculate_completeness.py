@@ -10,8 +10,12 @@ import random
 from collections import defaultdict, Counter
 
 
-input_file = "../secret/HBF.113917-pentatomidae-suomi/occurrences.txt"
-output_file = "../sampledata/celldata_pentatomidae_completeness_100km_colors.json"
+input_file = "../secret/HBF.114262-heteroptera/occurrences.txt"
+output_file_template = "../sampledata/celldata_heteroptera_METHOD_100km_colors.json"
+
+input_file = "../secret/HBF.114297-kaskaat/occurrences.txt"
+output_file_template = "../sampledata/celldata_kaskaat_METHOD_100km_colors.json"
+
 
 
 def hex_color_ramp(value, min_val, max_val):
@@ -201,10 +205,41 @@ def calculate_completeness(area_species_list):
     return min(completeness, 1.5)  # Allow slight overestimation
 
 
+def calculate_accumulation_slope(accumulation_curve):
+    """
+    Calculate the final slope of a species accumulation curve.
+    This represents the rate of new species discovery per unit of effort.
+    
+    Args:
+        accumulation_curve (list): Averaged species accumulation curve values
+    
+    Returns:
+        float: Slope value (species per record)
+    """
+    if not accumulation_curve or len(accumulation_curve) < 2:
+        return 0.0
+    
+    n_points = len(accumulation_curve)
+    last_point = accumulation_curve[-1]
+    
+    # If fewer than 10 records, calculate slope over entire range
+    if n_points < 10:
+        first_point = accumulation_curve[0]
+        if n_points == 1:
+            return 0.0
+        slope = (last_point - first_point) / (n_points - 1)
+    else:
+        # Calculate slope between last point and 10 records back
+        point_10_back = accumulation_curve[n_points - 11]  # Index is n_points - 11 (0-indexed)
+        slope = (last_point - point_10_back) / 10.0
+    
+    return slope
+
+
 def main():
     print("Calculating species diversity completeness for 100x100 km areas...")
     print(f"Input file: {input_file}")
-    print(f"Output file: {output_file}")
+    print(f"Output file template: {output_file_template}")
     
     # Dictionary to store all records per 100km grid cell
     # Key: 100km grid cell, Value: list of species names (with duplicates)
@@ -247,16 +282,21 @@ def main():
     
     print(f"\nFound {len(area_records)} 100x100 km areas with records")
     
-    # Calculate completeness for each area
+    # Calculate completeness and survey urgency (slope) for each area
     completeness_results = {}
+    slope_results = {}
     
     for area, species_list in area_records.items():
         # Calculate completeness using Chao1 estimator
         completeness = calculate_completeness(species_list)
         completeness_results[area] = completeness
         
-        # Optional: Also build accumulation curve if needed for analysis
-        # (not storing it in output to keep file size manageable)
+        # Build accumulation curve with 1000 iterations for rarefaction
+        accumulation_curve = build_accumulation_curve(species_list, n_iterations=1000)
+        
+        # Calculate the final slope of the accumulation curve
+        slope = calculate_accumulation_slope(accumulation_curve)
+        slope_results[area] = slope
     
     # Print statistics
     completeness_values = list(completeness_results.values())
@@ -290,13 +330,44 @@ def main():
             }
         
         # Write data with both color and value to JSON file
-        with open(output_file, 'w', encoding='utf-8') as f:
+        chao1_output_file = output_file_template.replace("METHOD", "chao1")
+        with open(chao1_output_file, 'w', encoding='utf-8') as f:
             json.dump(completeness_data, f, indent=2, ensure_ascii=False)
         
-        print(f"\nOutput written to {output_file}")
+        print(f"\nOutput written to {chao1_output_file}")
         print(f"Sample of output: {dict(list(completeness_data.items())[:3])}")
     else:
         print("No completeness values to save.")
+    
+    # Create output data for species accumulation curve with rarefaction / survey urgency (slope) with color ramp
+    if slope_results:
+        slope_values = list(slope_results.values())
+        min_slope = min(slope_values)
+        max_slope = max(slope_values)
+        
+        # Create output filename for slope data
+        accumulation_curve_output_file = output_file_template.replace("METHOD", "accumulation_curve")
+        
+        slope_data = {}
+        for area, slope in slope_results.items():
+            color = hex_color_ramp(slope, min_slope, max_slope)
+            slope_data[area] = {
+                "color": color,
+                "value": slope
+            }
+        
+        # Write slope data with both color and value to JSON file
+        with open(accumulation_curve_output_file, 'w', encoding='utf-8') as f:
+            json.dump(slope_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"\nSurvey urgency (slope) output written to {accumulation_curve_output_file}")
+        print(f"Slope statistics:")
+        print(f"  Mean: {sum(slope_values) / len(slope_values):.6f}")
+        print(f"  Min: {min(slope_values):.6f}")
+        print(f"  Max: {max(slope_values):.6f}")
+        print(f"Sample of output: {dict(list(slope_data.items())[:3])}")
+    else:
+        print("No slope values to save.")
 
 
 if __name__ == "__main__":

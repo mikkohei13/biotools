@@ -10,7 +10,14 @@ from helpers.simplemap import create_finland_map
 
 
 data_directory = "sampledata"
-data_filename = "celldata_pentatomidae_completeness_100km_colors.json"
+data_filename = "celldata_heteroptera_chao1_100km_colors.json"
+data_filename = "celldata_heteroptera_accumulation_curve_100km_colors.json"
+data_filename = "celldata_heteroptera-speciescount-100km.json"
+
+data_filename = "celldata_kaskaat-speciescount-100km.json"
+data_filename = "celldata_kaskaat_chao1_100km_colors.json"
+data_filename = "celldata_kaskaat_accumulation_curve_100km_colors.json"
+
 map_file_path = f"./results/{data_filename}_map.png"
 
 data_file_path = f"{data_directory}/{data_filename}"
