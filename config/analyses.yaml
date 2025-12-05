@@ -19,6 +19,11 @@ analyses:
     method: "speciescount"
     resolution_km: 50
 
+  - name: "luteet_rarepotential_50km"
+    input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
+    method: "rare_species_potential"
+    resolution_km: 50
+
 # Kaskaat
   - name: "kaskaat_chao1_50km"
     input_file: "secret/HBF.114297-kaskaat/occurrences.txt"

@@ -83,7 +83,7 @@ def validate_config(config):
         return False, f"Input file not found: {config['input_file']}"
     
     # Check method
-    valid_methods = ['speciescount', 'chao1', 'accumulation_curve']
+    valid_methods = ['speciescount', 'chao1', 'accumulation_curve', 'rare_species_potential']
     if config['method'] not in valid_methods:
         return False, f"Invalid method: {config['method']}. Must be one of: {', '.join(valid_methods)}"
     
