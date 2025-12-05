@@ -88,7 +88,7 @@ def validate_config(config):
         return False, f"Invalid method: {config['method']}. Must be one of: {', '.join(valid_methods)}"
     
     # Check resolution
-    valid_resolutions = [1, 10, 100]
+    valid_resolutions = [1, 10, 50, 100]
     if config['resolution_km'] not in valid_resolutions:
         return False, f"Invalid resolution: {config['resolution_km']}km. Must be one of: {', '.join(map(str, valid_resolutions))}"
     

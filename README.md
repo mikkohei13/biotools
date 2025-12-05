@@ -10,7 +10,7 @@
 - **Local Development**: Easy setup for local testing and development
 - **Friendly and Smart Capybara**: Because a capybara staring at you makes you happy.
 
-## Setup
+## Setup and Usage
 
 ### First time setup
 
@@ -20,7 +20,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Daily Usage
+### Daily Usage
 
 ```bash
 source venv/bin/activate
@@ -32,7 +32,7 @@ Access the app at http://localhost:5000/simple
 deactivate
 ```
 
-## Package Management
+### Package Management
 
 ```bash
 pip install package_name
@@ -42,3 +42,17 @@ pip freeze > requirements.txt
 ```bash
 pip install -r requirements.txt
 ```
+
+## Command line tools
+
+# List available configurations
+    python generate_map.py --list
+
+# Run a specific configuration
+    python generate_map.py --config heteroptera_chao1_100km
+
+# Run multiple configurations
+    python generate_map.py --config heteroptera_chao1_100km kaskaat_chao1_100km
+
+# Run all configurations
+    python generate_map.py --all

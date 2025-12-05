@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Patch
 
 
-def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12, 16), dpi=150):
+def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12, 16), dpi=150, resolution_km=None):
     """
     Create a map of Finland with colored squares overlaid on a grid system.
     
@@ -28,9 +28,9 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
         squares_data (dict): Dictionary with grid coordinates as keys (format "northing:easting")
                            and dictionaries as values containing "color" (hex color code) and "value" (numeric).
                            Example: {"67:34": {"color": "#ff0000", "value": 0.85}}
-                           Grid size is determined by digit count:
+                           Grid size is determined by digit count (or resolution_km if provided):
                            - 2 digits (e.g., "67:34") = 100km squares
-                           - 3 digits (e.g., "668:338") = 10km squares
+                           - 3 digits (e.g., "668:338") = 10km squares (or 50km if resolution_km=50)
                            - 4 digits (e.g., "6789:3458") = 1km squares
         output_file (str): Path to the output PNG file
         borders_file (str, optional): Path to the Finland borders GeoJSON file.
@@ -38,6 +38,8 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
                                      as this module.
         figsize (tuple, optional): Figure size in inches. Defaults to (12, 16).
         dpi (int, optional): Resolution in dots per inch. Defaults to 150.
+        resolution_km (int, optional): Grid resolution in kilometers. If provided, overrides
+                                      digit-based size detection for 50km squares.
     
     Returns:
         bool: True if the map was created successfully, False otherwise.
@@ -123,15 +125,20 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
                 print(f"Warning: Mismatched coordinate digits in {square_key}. Expected same number of digits.")
                 continue
             
-            # Determine multiplier and square size based on digit count
+            # Determine multiplier and square size based on digit count (and resolution_km for 50km)
             if northing_digits == 2:
                 # 100km squares: "67:34" -> multiply by 100000
                 multiplier = 100000
                 square_size = 100000
             elif northing_digits == 3:
-                # 10km squares: "668:338" -> multiply by 10000
-                multiplier = 10000
-                square_size = 10000
+                if resolution_km == 50:
+                    # 50km squares: "670:345" -> multiply by 10000, size is 50000
+                    multiplier = 10000
+                    square_size = 50000
+                else:
+                    # 10km squares: "668:338" -> multiply by 10000
+                    multiplier = 10000
+                    square_size = 10000
             elif northing_digits == 4:
                 # 1km squares: "6789:3458" -> multiply by 1000
                 multiplier = 1000
@@ -162,6 +169,26 @@ def create_finland_map(squares_data, output_file, borders_file=None, figsize=(12
     if legend_items:
         # Sort legend items by value for better readability
         sorted_items = sorted(legend_items.items(), key=lambda x: x[1] if x[1] is not None else float('-inf'))
+        
+        # Limit legend to at most half of vertical space
+        # Estimate ~22 pixels per legend entry (based on default matplotlib font)
+        pixels_per_entry = 22
+        max_legend_height = (figsize[1] * dpi) / 2
+        max_entries = int(max_legend_height / pixels_per_entry)
+        max_entries = max(2, max_entries)  # At least show 2 entries (min and max)
+        
+        # Subsample if too many items
+        if len(sorted_items) > max_entries:
+            # Pick evenly distributed indices, always including first and last
+            indices = [0]  # Always include first (min value)
+            if max_entries > 2:
+                step = (len(sorted_items) - 1) / (max_entries - 1)
+                for i in range(1, max_entries - 1):
+                    indices.append(int(i * step))
+            indices.append(len(sorted_items) - 1)  # Always include last (max value)
+            # Remove duplicates while preserving order
+            indices = list(dict.fromkeys(indices))
+            sorted_items = [sorted_items[i] for i in indices]
         
         # Create legend handles and labels
         legend_handles = []

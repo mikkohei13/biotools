@@ -22,6 +22,8 @@ def convert_to_resolution(grid_cell, target_resolution_km):
             digits_needed = 4
         elif target_resolution_km == 10:
             digits_needed = 3
+        elif target_resolution_km == 50:
+            digits_needed = 3
         elif target_resolution_km == 100:
             digits_needed = 2
         else:
@@ -49,6 +51,11 @@ def convert_to_resolution(grid_cell, target_resolution_km):
         elif current_easting_digits < digits_needed:
             # Pad with zeros if input has fewer digits (shouldn't happen normally)
             easting = easting * (10 ** (digits_needed - current_easting_digits))
+        
+        # For 50 km resolution, round down so last digit is 0 or 5
+        if target_resolution_km == 50:
+            northing = (northing // 5) * 5
+            easting = (easting // 5) * 5
         
         # Format with leading zeros if needed to match exact digit count
         return f"{northing:0{digits_needed}d}:{easting:0{digits_needed}d}"

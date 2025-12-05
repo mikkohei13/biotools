@@ -2,42 +2,52 @@
 # Each entry defines an analysis to run with specific parameters
 
 analyses:
-  - name: "heteroptera_chao1_100km"
+
+# Luteet
+  - name: "luteet_chao1_50km"
     input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
     method: "chao1"
-    resolution_km: 100
+    resolution_km: 50
 
-  - name: "heteroptera_accumulation_100km"
+  - name: "luteet_accumulation_50km"
     input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
     method: "accumulation_curve"
-    resolution_km: 100
+    resolution_km: 50
 
-  - name: "heteroptera_speciescount_100km"
+  - name: "luteet_speciescount_50km"
     input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
     method: "speciescount"
-    resolution_km: 100
+    resolution_km: 50
 
-  - name: "heteroptera_speciescount_10km"
-    input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
-    method: "speciescount"
-    resolution_km: 10
-
-  - name: "kaskaat_chao1_100km"
+# Kaskaat
+  - name: "kaskaat_chao1_50km"
     input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
     method: "chao1"
-    resolution_km: 100
+    resolution_km: 50
 
-  - name: "kaskaat_accumulation_100km"
+  - name: "kaskaat_accumulation_50km"
     input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
     method: "accumulation_curve"
-    resolution_km: 100
+    resolution_km: 50
 
-  - name: "kaskaat_speciescount_100km"
+  - name: "kaskaat_speciescount_50km"
     input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
     method: "speciescount"
-    resolution_km: 100
+    resolution_km: 50
 
-  - name: "kempit_accumulation_100km"
+# Kempit
+  - name: "kempit_chao1_50km"
+    input_file: "secret/HBF.114311-kempit/occurrences.txt"
+    method: "chao1"
+    resolution_km: 50
+
+  - name: "kempit_accumulation_50km"
     input_file: "secret/HBF.114311-kempit/occurrences.txt"
     method: "accumulation_curve"
-    resolution_km: 100
+    resolution_km: 50
+
+  - name: "kempit_speciescount_50km"
+    input_file: "secret/HBF.114311-kempit/occurrences.txt"
+    method: "speciescount"
+    resolution_km: 50
+

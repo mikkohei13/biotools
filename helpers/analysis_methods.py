@@ -119,18 +119,19 @@ def calculate_chao1_estimator(species_counts):
     return chao1
 
 
-def calculate_completeness(area_species_list):
+def calculate_incompleteness(area_species_list):
     """
-    Calculate inventory completeness for an area using Chao1 estimator.
+    Calculate inventory incompleteness for an area using Chao1 estimator.
     
     Args:
         area_species_list (list): List of species names (with duplicates)
     
     Returns:
-        float: Completeness ratio (0.0 to 1.0+), where 1.0 means fully sampled
+        float: Incompleteness ratio (0.0+), where 0.0 means fully sampled,
+               higher values mean more species remain undiscovered
     """
     if not area_species_list:
-        return 0.0
+        return 1.0
     
     # Count species occurrences
     species_counts = Counter(area_species_list)
@@ -142,13 +143,13 @@ def calculate_completeness(area_species_list):
     S_est = calculate_chao1_estimator(species_counts)
     
     if S_est == 0:
-        return 0.0
+        return 1.0
     
-    # Completeness = Observed / Estimated
+    # Incompleteness = 1 - (Observed / Estimated)
     completeness = S_obs / S_est
+    incompleteness = max(0.0, 1.0 - completeness)
     
-    # Cap at 1.5 (allow slight overestimation if estimator underestimates)
-    return min(completeness, 1.5)
+    return incompleteness
 
 
 def calculate_accumulation_slope(accumulation_curve):
@@ -184,20 +185,21 @@ def calculate_accumulation_slope(accumulation_curve):
 
 def calculate_chao1(area_records):
     """
-    Calculate Chao1 completeness for each grid cell.
+    Calculate Chao1 incompleteness for each grid cell.
     
     Args:
         area_records (dict): Dictionary mapping grid cells to lists of species names
                            Example: {"67:34": ["Species A", "Species B", "Species A"], ...}
     
     Returns:
-        dict: Dictionary mapping grid cells to completeness values
-              Example: {"67:34": 0.85, "68:35": 0.92, ...}
+        dict: Dictionary mapping grid cells to incompleteness values (0.0 = fully sampled,
+              higher = more species likely remain undiscovered)
+              Example: {"67:34": 0.15, "68:35": 0.08, ...}
     """
     result = {}
     for grid_cell, species_list in area_records.items():
-        completeness = calculate_completeness(species_list)
-        result[grid_cell] = completeness
+        incompleteness = calculate_incompleteness(species_list)
+        result[grid_cell] = incompleteness
     
     return result
 

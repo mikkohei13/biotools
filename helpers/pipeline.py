@@ -72,8 +72,9 @@ def process_data(input_file, method, resolution_km, output_base="results"):
         ValueError: If method or resolution is invalid
     """
     # Validate resolution
-    if resolution_km not in [1, 10, 100]:
-        raise ValueError(f"Invalid resolution: {resolution_km}km. Must be 1, 10, or 100.")
+    valid_resolutions = [1, 10, 50, 100]
+    if resolution_km not in valid_resolutions:
+        raise ValueError(f"Invalid resolution: {resolution_km}km. Must be one of: {', '.join(map(str, valid_resolutions))}")
     
     # Extract basename from input file path
     basename = extract_basename(input_file)
@@ -121,7 +122,7 @@ def process_data(input_file, method, resolution_km, output_base="results"):
     
     # Step 6: Generate map
     print(f"  Generating map to {map_path}...")
-    success = create_finland_map(data_with_colors, str(map_path))
+    success = create_finland_map(data_with_colors, str(map_path), resolution_km=resolution_km)
     
     if not success:
         raise RuntimeError(f"Failed to generate map: {map_path}")
