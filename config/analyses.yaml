@@ -19,11 +19,6 @@ analyses:
     method: "speciescount"
     resolution_km: 50
 
-  - name: "luteet_rarepotential_50km"
-    input_file: "secret/HBF.114262-heteroptera/occurrences.txt"
-    method: "rare_species_potential"
-    resolution_km: 50
-
 # Kaskaat
   - name: "kaskaat_chao1_50km"
     input_file: "secret/HBF.114297-kaskaat/occurrences.txt"
@@ -41,18 +36,18 @@ analyses:
     resolution_km: 50
 
 # Kempit
-  - name: "kempit_chao1_50km"
+  - name: "kempit_chao1_100km"
     input_file: "secret/HBF.114311-kempit/occurrences.txt"
     method: "chao1"
-    resolution_km: 50
+    resolution_km: 100
 
-  - name: "kempit_accumulation_50km"
+  - name: "kempit_accumulation_100km"
     input_file: "secret/HBF.114311-kempit/occurrences.txt"
     method: "accumulation_curve"
-    resolution_km: 50
+    resolution_km: 100
 
-  - name: "kempit_speciescount_50km"
+  - name: "kempit_speciescount_100km"
     input_file: "secret/HBF.114311-kempit/occurrences.txt"
     method: "speciescount"
-    resolution_km: 50
+    resolution_km: 100
 
